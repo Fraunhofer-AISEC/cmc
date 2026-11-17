@@ -46,7 +46,7 @@ type estConfig struct {
 	TlsCaChain   []string   `toml:"tls_ca_chain"  flag:"tls-ca-chain" default:"{data}/tls-chain.pem" path:"true" usage:"comma-separated paths to TLS certificate chain for EST HTTPS server"`
 	CertValidity string     `toml:"cert_validity" flag:"cert-validity" default:"4320h" usage:"lifetime of enrolled certificates as a Go duration string, e.g. 4320h"`
 	TokenPath    string     `toml:"token_path"    flag:"token-path"   default:"{data}/tokens" path:"true" usage:"token store for verifying bootstrap tokens"`
-	ClientCas    []string   `toml:"client_cas"    flag:"est-client-cas" path:"true" usage:"comma-separated paths to CAs for client certificate authentication, required by the certificate authentication method"`
+	ClientCas    []string   `toml:"client_cas"    flag:"est-client-cas" default:"{data}/ca-chain.pem" path:"true" usage:"comma-separated paths to CAs for client certificate authentication, required by the certificate authentication method. Must include the EST CA for /simplereenroll"`
 	Auth         authConfig `toml:"auth"`
 }
 
@@ -62,10 +62,12 @@ func (e *estConfig) Validate(r *config.Report) {
 }
 
 // authConfig holds the client authentication methods per enrollment endpoint. A request is
-// served if any of the configured methods succeeds. An empty list disables the endpoint
+// served if any of the configured methods succeeds, except for /simplereenroll, which requires
+// all of them. An empty list disables the endpoint
 type authConfig struct {
-	SimpleEnroll      []string `toml:"simpleenroll"      flag:"auth-simpleenroll"      default:"attestation" enum:"none,token,certificate,attestation" usage:"comma-separated authentication methods for /simpleenroll, empty disables the endpoint. attestation verifies the attestation report in the CSR"`
-	TpmActivateEnroll []string `toml:"tpmactivateenroll" flag:"auth-tpmactivateenroll" default:"token"       enum:"none,token,certificate"             usage:"comma-separated authentication methods for /tpmactivateenroll, empty disables the endpoint"`
+	SimpleEnroll      []string `toml:"simpleenroll"      flag:"auth-simpleenroll"      default:"attestation"             enum:"none,token,certificate,attestation" usage:"comma-separated authentication methods for /simpleenroll, empty disables the endpoint. attestation verifies the attestation report in the CSR"`
+	SimpleReenroll    []string `toml:"simplereenroll"    flag:"auth-simplereenroll"    default:"certificate,attestation" enum:"certificate,attestation"            usage:"comma-separated authentication methods for /simplereenroll, which must all succeed, empty disables the endpoint. certificate is required"`
+	TpmActivateEnroll []string `toml:"tpmactivateenroll" flag:"auth-tpmactivateenroll" default:"token"                   enum:"none,token,certificate"             usage:"comma-separated authentication methods for /tpmactivateenroll, empty disables the endpoint"`
 }
 
 // endpointAuth is the authentication configuration of a single enrollment endpoint
@@ -78,16 +80,21 @@ type endpointAuth struct {
 func (a *authConfig) endpoints() []endpointAuth {
 	return []endpointAuth{
 		{est.EnrollEndpoint, "simpleenroll", a.SimpleEnroll},
+		{est.ReenrollEndpoint, "simplereenroll", a.SimpleReenroll},
 		{est.TpmActivateEnrollEndpoint, "tpmactivateenroll", a.TpmActivateEnroll},
 	}
 }
 
-// Validate rejects none combined with other methods, as it would make them meaningless
+// Validate rejects none combined with other methods, as it would make them meaningless, and
+// requires the client certificate for /simplereenroll (RFC 7030 4.2.2)
 func (a *authConfig) Validate(r *config.Report) {
 	for _, e := range a.endpoints() {
 		if len(e.methods) > 1 && slices.Contains(e.methods, "none") {
 			r.Errorf(e.key, "none cannot be combined with other methods")
 		}
+	}
+	if len(a.SimpleReenroll) > 0 && !slices.Contains(a.SimpleReenroll, "certificate") {
+		r.Errorf("simplereenroll", "must contain certificate")
 	}
 }
 
@@ -234,14 +241,6 @@ func (c *Config) resolve() error {
 		return fmt.Errorf("trust.root_cas: failed to load trusted root CAs: %w", err)
 	}
 
-	// Client CAs are validated to be set if certificate authentication is configured
-	if len(c.Est.ClientCas) > 0 {
-		c.clientCas, err = internal.ReadCerts(c.Est.ClientCas)
-		if err != nil {
-			return fmt.Errorf("est.client_cas: failed to load client CAs: %w", err)
-		}
-	}
-
 	c.certPolicies, err = c.CertPolicy.Tree()
 	if err != nil {
 		return fmt.Errorf("cert_policy.arc: %w", err)
@@ -265,6 +264,14 @@ func (c *Config) resolve() error {
 
 	if err := c.resolveAuth(); err != nil {
 		return err
+	}
+
+	// Client CAs are only loaded if required, validation ensures that they are set
+	if c.certAuth() {
+		c.clientCas, err = internal.ReadCerts(c.Est.ClientCas)
+		if err != nil {
+			return fmt.Errorf("est.client_cas: failed to load client CAs: %w", err)
+		}
 	}
 
 	// Policies are optional, and validated to be configured together with the engine
@@ -300,6 +307,16 @@ func (c *Config) resolve() error {
 	c.certValidity, _ = time.ParseDuration(c.Est.CertValidity)
 
 	return nil
+}
+
+// certAuth returns whether any enabled endpoint authenticates via client certificates
+func (c *Config) certAuth() bool {
+	for _, m := range c.auth {
+		if m.Has(internal.AuthCertificate) {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveAuth parses the authentication methods of the enabled enrollment endpoints

@@ -9,6 +9,7 @@ ca_key = "../../data/pki/ca-key.pem"
 ca_chain = ["../../data/pki/ca.pem"]
 tls_key = "../../data/pki/est-tls-key.pem"
 tls_ca_chain = ["../../data/pki/est-tls.pem", "../../data/pki/ca.pem"]
+client_cas = ["../../data/pki/ca.pem"]
 token_path = "../../data/token_store"
 
 [est.auth]

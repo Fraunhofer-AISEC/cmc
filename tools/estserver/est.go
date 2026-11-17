@@ -85,11 +85,20 @@ func (s *Server) handleCsrattrs(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
+	s.handleEnroll(w, req, est.EnrollEndpoint)
+}
 
-	log.Debugf("Received /simpleenroll request from %v", req.RemoteAddr)
+func (s *Server) handleSimplereenroll(w http.ResponseWriter, req *http.Request) {
+	s.handleEnroll(w, req, est.ReenrollEndpoint)
+}
+
+// handleEnroll serves /simpleenroll and /simplereenroll, which only differ in the authentication
+func (s *Server) handleEnroll(w http.ResponseWriter, req *http.Request, endpoint string) {
+
+	log.Debugf("Received %v request from %v", endpoint, req.RemoteAddr)
 
 	if strings.Compare(req.Method, "POST") != 0 {
-		writeHttpErrorf(w, "Only method POST implemented for simpleenroll request")
+		writeHttpErrorf(w, "Only method POST implemented for %v request", endpoint)
 		return
 	}
 
@@ -125,10 +134,23 @@ func (s *Server) handleSimpleenroll(w http.ResponseWriter, req *http.Request) {
 			return s.verifyAttestationReport(csr, att.Report)
 		}
 	}
-	attestResult, err := s.authorize(est.EnrollEndpoint, req, attest)
+	var attestResult *ar.AttestationResult
+	if endpoint == est.ReenrollEndpoint {
+		attestResult, err = s.authorizeReenroll(req, attest)
+	} else {
+		attestResult, err = s.authorize(endpoint, req, attest)
+	}
 	if err != nil {
 		writeUnauthorized(w, err)
 		return
+	}
+
+	// RFC 7030 4.2.2: subject and SANs must be identical to the certificate being renewed
+	if endpoint == est.ReenrollEndpoint {
+		if err := matchCertNames(csr, req.TLS.VerifiedChains[0][0]); err != nil {
+			writeHttpErrorf(w, "CSR does not match client certificate: %v", err)
+			return
+		}
 	}
 
 	// TPM key evidence is verified regardless of the authentication methods

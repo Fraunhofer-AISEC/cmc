@@ -139,6 +139,7 @@ func TestAuthDefaults(t *testing.T) {
 	}
 	want := map[string]internal.AuthMethod{
 		est.EnrollEndpoint:            internal.AuthAttestation,
+		est.ReenrollEndpoint:          internal.AuthCertificate | internal.AuthAttestation,
 		est.TpmActivateEnrollEndpoint: internal.AuthToken,
 	}
 	if !maps.Equal(c.auth, want) {
@@ -154,8 +155,15 @@ func TestAuth(t *testing.T) {
 	}{
 		{"multiple methods", []string{"--auth-simpleenroll", "token,certificate,attestation",
 			"--est-client-cas", "client-ca.pem"}, ""},
-		{"certificate without client CAs", []string{"--auth-tpmactivateenroll", "certificate"},
+		{"certificate without client CAs", []string{"--auth-tpmactivateenroll", "certificate",
+			"--est-client-cas", ""}, "est.client_cas: must be set"},
+		{"reenroll without client CAs", []string{"--est-client-cas", ""},
 			"est.client_cas: must be set"},
+		{"reenroll certificate only", []string{"--auth-simplereenroll", "certificate"}, ""},
+		{"reenroll without certificate", []string{"--auth-simplereenroll", "attestation"},
+			"est.auth.simplereenroll: must contain certificate"},
+		{"reenroll none", []string{"--auth-simplereenroll", "none"},
+			"est.auth.simplereenroll"},
 		{"none", []string{"--auth-simpleenroll", "none"}, ""},
 		{"none combined", []string{"--auth-simpleenroll", "none,token"},
 			"est.auth.simpleenroll: none cannot be combined"},

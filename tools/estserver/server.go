@@ -166,6 +166,9 @@ func NewServer(c *Config) (*Server, error) {
 		http.HandleFunc(est.EndpointPrefix+est.EnrollEndpoint, server.handleSimpleenroll)
 		http.HandleFunc(est.EndpointPrefix+est.CsrattrsEndpoint, server.handleCsrattrs)
 	}
+	if _, ok := c.auth[est.ReenrollEndpoint]; ok {
+		http.HandleFunc(est.EndpointPrefix+est.ReenrollEndpoint, server.handleSimplereenroll)
+	}
 	if _, ok := c.auth[est.TpmActivateEnrollEndpoint]; ok {
 		http.HandleFunc(est.EndpointPrefix+est.TpmActivateEnrollEndpoint,
 			server.handleTpmActivateEnroll)
@@ -217,11 +220,7 @@ func newTlsConfig(c *Config) *tls.Config {
 		},
 	}
 
-	var certAuth internal.AuthMethod
-	for _, m := range c.auth {
-		certAuth |= m & internal.AuthCertificate
-	}
-	if certAuth != 0 {
+	if c.certAuth() {
 		// Only the dedicated client CAs are trusted, never the metadata CAs or the system store
 		log.Debugf("Requesting client certificates")
 		clientCas := x509.NewCertPool()

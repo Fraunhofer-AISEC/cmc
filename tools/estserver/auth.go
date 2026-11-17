@@ -90,6 +90,48 @@ func (s *Server) authorize(endpoint string, req *http.Request, attest attestFunc
 	return nil, errors.Join(errs...)
 }
 
+// authorizeReenroll authenticates a /simplereenroll request, which requires all configured
+// methods to succeed. The client certificate is always required, as the request renews it. The
+// attestation report verifier attest is nil if the request carries no report
+func (s *Server) authorizeReenroll(req *http.Request, attest attestFunc,
+) (*ar.AttestationResult, error) {
+
+	methods, ok := s.auth[est.ReenrollEndpoint]
+	if !ok {
+		return nil, fmt.Errorf("no authentication methods configured for %v", est.ReenrollEndpoint)
+	}
+
+	if attest != nil && !methods.Has(internal.AuthAttestation) {
+		return nil, fmt.Errorf("request carries an attestation report, but %v is configured "+
+			"for %v instead of attestation (configuration mismatch)", methods,
+			est.ReenrollEndpoint)
+	}
+
+	if !methods.Has(internal.AuthCertificate) {
+		return nil, fmt.Errorf("certificate authentication not configured for %v",
+			est.ReenrollEndpoint)
+	}
+	if req.TLS == nil || len(req.TLS.VerifiedChains) == 0 {
+		return nil, errors.New("certificate: no verified client certificate")
+	}
+
+	if !methods.Has(internal.AuthAttestation) {
+		log.Debugf("Authenticated %v request via client certificate", est.ReenrollEndpoint)
+		return nil, nil
+	}
+	if attest == nil {
+		return nil, errors.New("attestation: no attestation report provided")
+	}
+	result, err := attest()
+	if err != nil {
+		return nil, fmt.Errorf("attestation: %w", err)
+	}
+	log.Debugf("Authenticated %v request via client certificate and attestation",
+		est.ReenrollEndpoint)
+
+	return result, nil
+}
+
 func verifyBootStrapToken(tokenPath string, req *http.Request) error {
 
 	authHeader := req.Header.Get("Authorization")

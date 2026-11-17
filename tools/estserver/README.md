@@ -9,13 +9,21 @@ metadata and proxies the hardware vendor collateral (AMD KDS, Intel PCS).
 All endpoints reside below `/.well-known/est`. The authentication methods of each enrollment
 endpoint are configured in `est.auth` (`none`, `token`, `certificate`, `attestation`). An endpoint
 without methods is disabled. `certificate` accepts TLS client certificates chaining to
-`est.client_cas`, which must be set for this method. Neither the metadata CAs (`trust.root_cas`) nor
-the system store are trusted for client authentication.
+`est.client_cas` (default: `est.ca_chain`), which must be set for this method. Neither the metadata
+CAs (`trust.root_cas`) nor the system store are trusted for client authentication.
 
-| Endpoint             | Enrolled key             | Authentication methods                        | Default       |
-| -------------------- | ------------------------ | --------------------------------------------- | ------------- |
-| `/simpleenroll`      | TLS key                  | `none`, `token`, `certificate`, `attestation` | `attestation` |
-| `/tpmactivateenroll` | TPM attestation key (AK) | `none`, `token`, `certificate`                | `token`       |
+| Endpoint             | Enrolled key             | Authentication methods                        | Default                   |
+| -------------------- | ------------------------ | --------------------------------------------- | ------------------------- |
+| `/simpleenroll`      | TLS key                  | `none`, `token`, `certificate`, `attestation` | `attestation`             |
+| `/simplereenroll`    | TLS key                  | `certificate`, `attestation`                  | `certificate,attestation` |
+| `/tpmactivateenroll` | TPM attestation key (AK) | `none`, `token`, `certificate`                | `token`                   |
+
+A request is served if any of the configured methods succeeds. `/simplereenroll` renews the TLS
+client certificate and requires all configured methods to succeed, so `certificate` is mandatory
+and `attestation` additionally requires fresh evidence in the CSR. `est.client_cas` must contain
+the EST CA. Subject and SANs of the CSR must be identical to the client certificate
+(RFC 7030 4.2.2), a new key is allowed. The certificate policies are derived from the fresh
+attestation result only.
 
 `/tpmactivateenroll` performs TPM credential activation, which proves that the AK resides in the
 TPM of the EK. `/csrattrs` requests attestation evidence in the CSR if `/simpleenroll` is
@@ -23,8 +31,8 @@ configured with `attestation`.
 
 ### Evidence in the CSR
 
-`/simpleenroll` accepts evidence in the CSR as specified by draft-ietf-lamps-csr-attestation
-(`id-aa-attestation` attribute):
+`/simpleenroll` and `/simplereenroll` accept evidence in the CSR as specified by
+draft-ietf-lamps-csr-attestation (`id-aa-attestation` attribute):
 
 - **CMC attestation report** (CMW record): verified with the hash of the CSR public key as nonce.
   `attestation` authenticates the client with it. A CSR with a report requires `attestation` to be
@@ -46,6 +54,7 @@ what the key may be used for and how it was enrolled:
 | -------------------- | -------------------------- | -------------------------- |
 | `/tpmactivateenroll` | `tcg-kp-AIKCertificate`    | none                       |
 | `/simpleenroll`      | `serverAuth`, `clientAuth` | attestation level and TEEs |
+| `/simplereenroll`    | `serverAuth`, `clientAuth` | attestation level and TEEs |
 
 The attestation level and TEE OIDs are only issued if the client authenticated via `attestation`.
 `tcg-kp-AIKCertificate` (2.23.133.8.3, TCG EK Credential Profile) marks AK certificates. The
