@@ -69,10 +69,7 @@ func Dial(network string, addr string, config *tls.Config, moreConfigs ...Connec
 
 	// Perform remote attestation
 	err = atlsHandshakeStart(conn, fingerprint, cc, Endpoint_Client)
-	if err != nil {
-		// Only log the error, still send handshake complete message to inform peer
-		log.Warnf("atls handshake failed: %v", err)
-	}
+	// On error, still send handshake complete message to inform peer
 	err = aTlsHandshakeComplete(conn, cc.Serializer, err)
 	if err != nil {
 		return nil, fmt.Errorf("atls handshake failed: %w", err)

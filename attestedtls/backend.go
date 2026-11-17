@@ -60,7 +60,7 @@ func Read(c net.Conn) ([]byte, error) {
 	_, err := c.Read(lenbuf)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to receive message: no length: %v", err)
+		return nil, fmt.Errorf("failed to receive message: no length: %w", err)
 	}
 
 	len := int(binary.BigEndian.Uint32(lenbuf)) // Max size of 4GB
