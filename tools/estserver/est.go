@@ -56,7 +56,7 @@ func (s *Server) handleCacerts(w http.ResponseWriter, req *http.Request) {
 	}
 	encoded := est.EncodeBase64(body)
 
-	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
+	sendResponse(w, est.MimeTypePKCS7CertsOnly, internal.HttpEncodingTypeBase64, encoded)
 }
 
 func (s *Server) handleCsrattrs(w http.ResponseWriter, req *http.Request) {
@@ -177,7 +177,7 @@ func (s *Server) handleEnroll(w http.ResponseWriter, req *http.Request, endpoint
 
 	log.Debugf("Enrolled cert %v", cert.Subject.CommonName)
 
-	sendResponse(w, est.MimeTypePKCS7, internal.HttpEncodingTypeBase64, encoded)
+	sendResponse(w, est.MimeTypePKCS7CertsOnly, internal.HttpEncodingTypeBase64, encoded)
 }
 
 // verifyTpmKey verifies that the CSR key resides in the same TPM as the AK, which is either
