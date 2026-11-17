@@ -226,3 +226,29 @@ This runs the following setup:
 As an alternative, use [reverse-proxy.caddyfile](../example-setup/configs/reverse-proxy.caddyfile)
 to let Caddy act as a reverse proxy only and deploy your own HTTP server on `localhost:8080` and
 use an HTTP client of your choice.
+
+#### Passport model
+
+[hello-world-reverse-proxy-passport.caddyfile](../example-setup/configs/hello-world-reverse-proxy-passport.caddyfile)
+performs no attestation on the aTLS layer. Instead, Caddy requires a client certificate that the
+EST server issued after a hardware-based attestation (see [Passport Model
+Attestation](#passport-model-attestation)). Both Caddy and `cmcctl proxy` fetch their TLS
+certificates from the cmcd:
+
+```sh
+# Run the EST server and the cmcd, both requiring attestation for enrollment by default
+estserver --config example-setup/configs/est-server.toml
+sudo cmcd --config example-setup/configs/cmcd.toml
+
+# Run the caddy atls reverse proxy requiring a hardware-attested client certificate
+caddy-atls run --config example-setup/configs/hello-world-reverse-proxy-passport.caddyfile
+
+# Run the cmcctl HTTP proxy without attestation
+cmcctl proxy --attest none --config example-setup/configs/cmcctl.toml
+
+# Request via proxy: SUCCESS
+curl -x http://localhost:4443 http://localhost:4445/
+```
+
+If the estserver runs with `--auth-simpleenroll none` and the cmcd with `--enrollment-auth none`,
+the client certificate carries no attestation level and Caddy rejects the connection.
