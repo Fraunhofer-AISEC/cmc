@@ -34,6 +34,8 @@ tools/hextobin/hextobin
 tools/mrtool/mrtool
 tools/pkghasher/pkghasher
 tools/ocsfgen/ocsfgen
+spire/spire-agent-plugin-cmc/spire-agent-plugin-cmc
+spire/spire-server-plugin-cmc/spire-server-plugin-cmc
 tpm/test_encrypted_ak.json
 example-setup/data-cmc/
 example-setup/**/*.cbor
