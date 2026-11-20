@@ -55,6 +55,12 @@ jobs:
           pushd tools/mrtool
           go build -ldflags="-s -w" -trimpath
           popd
+          pushd spire/spire-agent-plugin-cmc
+          go build -ldflags="-s -w" -trimpath
+          popd
+          pushd spire/spire-server-plugin-cmc
+          go build -ldflags="-s -w" -trimpath
+          popd
       - name: API Docs Check
         run: |
           ./bin/update-api

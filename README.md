@@ -72,6 +72,11 @@ the International Data Spaces (IDS), see [IDS Example Setup](./doc/ids-example-s
 A description of tools and helper programs can be found in the
 [Tools Documentation](./doc/tools.md).
 
+### SPIRE Integration
+
+SPIRE plugins that issue SPIFFE identities to attested nodes are described in the
+[SPIRE Plugins README](./spire/README.md).
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for information about the
