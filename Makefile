@@ -6,11 +6,13 @@
 #   infra:  estserver, cmcbackend (provisioning and monitoring servers)
 #   tools:  operator tools for metadata and reference value generation
 #   caddy:  caddy-atls, Caddy with the aTLS plugin (attested reverse proxy)
+#   spire:  SPIRE agent and server plugins
 
 DEVICE := cmcd cmcctl
 INFRA  := estserver cmcbackend
 TOOLS  := metatool mrtool snptool tdxtool azuretool
 CADDY  := caddy-atls
+SPIRE  := spire-agent-plugin-cmc spire-server-plugin-cmc
 
 DEVICE_UNITS := cmcd
 INFRA_UNITS  := estserver cmcbackend
@@ -50,19 +52,20 @@ CMCCTL_INIT_ARGS := --cmc socket://$(RUNDIR)/cmc.sock
 endif
 BINDIR ?= $(PREFIX)/bin
 
-pkg = $(if $(filter $(1),$(DEVICE)),./$(1),./tools/$(1))
+pkg = $(if $(filter $(1),$(DEVICE)),./$(1),$(if $(filter $(1),$(SPIRE)),./spire/$(1),./tools/$(1)))
 
 .DEFAULT_GOAL := build
-.PHONY: build build-infra build-tools build-caddy build-all egocmc clean FORCE \
-	install install-infra install-tools install-caddy install-all \
-	uninstall uninstall-infra uninstall-tools uninstall-caddy uninstall-all \
+.PHONY: build build-infra build-tools build-caddy build-spire build-all egocmc clean FORCE \
+	install install-infra install-tools install-caddy install-spire install-all \
+	uninstall uninstall-infra uninstall-tools uninstall-caddy uninstall-spire uninstall-all \
 	mode-notice reload
 
 build: $(addprefix $(BUILDDIR)/,$(DEVICE))
 build-infra: $(addprefix $(BUILDDIR)/,$(INFRA))
 build-tools: $(addprefix $(BUILDDIR)/,$(TOOLS))
 build-caddy: $(BUILDDIR)/$(CADDY)
-build-all: build build-infra build-tools build-caddy
+build-spire: $(addprefix $(BUILDDIR)/,$(SPIRE))
+build-all: build build-infra build-tools build-caddy build-spire
 
 # go build decides itself whether anything needs to be rebuilt
 $(BUILDDIR)/%: FORCE
@@ -176,7 +179,11 @@ install-caddy: mode-notice
 	@$(MAKE) --no-print-directory reload
 	@echo "Adjust $(CONFDIR)/caddy-atls.caddyfile, then run '$(SYSTEMCTL) enable --now caddy-atls'"
 
-install-all: install install-infra install-tools install-caddy
+install-spire: mode-notice
+	$(call check_built,$(SPIRE))
+	$(call install_bins,$(SPIRE))
+
+install-all: install install-infra install-tools install-caddy install-spire
 
 # Configs and data are kept
 uninstall:
@@ -197,4 +204,7 @@ uninstall-caddy:
 	rm -f $(patsubst %,$(DESTDIR)$(UNITDIR)/%.service,$(CADDY_UNITS))
 	@$(MAKE) --no-print-directory reload
 
-uninstall-all: uninstall uninstall-infra uninstall-tools uninstall-caddy
+uninstall-spire:
+	rm -f $(addprefix $(DESTDIR)$(BINDIR)/,$(SPIRE))
+
+uninstall-all: uninstall uninstall-infra uninstall-tools uninstall-caddy uninstall-spire
