@@ -24,9 +24,6 @@ import (
 	"fmt"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	// local modules
 
 	"github.com/Fraunhofer-AISEC/cmc/api"
@@ -50,7 +47,7 @@ func (a GrpcApi) generate(c *Config) error {
 
 	log.Infof("Sending grpc request type 'Attest' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpcapi.NewClient(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -95,7 +92,7 @@ func (a GrpcApi) verify(c *Config) error {
 
 	log.Infof("Sending grpc request type 'Verify' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpcapi.NewClient(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -151,7 +148,7 @@ func (a GrpcApi) enroll(c *Config) error {
 
 	log.Infof("Sending grpc request type 'TLSCreate' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpcapi.NewClient(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -205,7 +202,7 @@ func (a GrpcApi) updateCerts(c *Config) error {
 
 	log.Infof("Sending grpc request type 'UpdateCerts' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpcapi.NewClient(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
@@ -240,7 +237,7 @@ func (a GrpcApi) updateMetadata(c *Config) error {
 
 	log.Infof("Sending grpc request type 'UpdateMetadata' to %v", c.cmcAddr)
 
-	conn, err := grpc.NewClient(c.cmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpcapi.NewClient(c.cmcAddr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to cmcd: %w", err)
 	}
