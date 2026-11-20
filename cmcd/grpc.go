@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 
 	"encoding/json"
 
@@ -68,18 +67,16 @@ func (wrapper GrpcServerWrapper) Serve(addr string, cmc *cmc.Cmc) error {
 		serializer: serializer,
 	}
 
-	// Create TCP server
-	log.Infof("Starting CMC gRPC Server on %v", addr)
-	listener, err := net.Listen("tcp", addr)
+	listener, err := listen(addr)
 	if err != nil {
-		return fmt.Errorf("failed to start server on %v: %v", addr, err)
+		return err
 	}
+	defer listener.Close()
 
 	// Start gRPC server
 	s := grpc.NewServer()
 	grpcapi.RegisterCMCServiceServer(s, server)
 
-	log.Infof("Waiting for grpc requests on %v", listener.Addr())
 	err = s.Serve(listener)
 	if err != nil {
 		return fmt.Errorf("failed to serve: %v", err)

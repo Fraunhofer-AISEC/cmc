@@ -67,7 +67,7 @@ func init() {
 
 // apiConfig configures how cmcctl reaches the CMC.
 type apiConfig struct {
-	Endpoint      string `toml:"endpoint"      flag:"cmc" default:"socket:///run/cmc/cmc.sock" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc://127.0.0.1:9955, or libapi"`
+	Endpoint      string `toml:"endpoint"      flag:"cmc" default:"socket:///run/cmc/cmc.sock" usage:"CMC API in the form <api>://<address>, e.g. socket:///run/cmc/cmc.sock, socket://127.0.0.1:9955, grpc:///run/cmc/cmc.sock, grpc://127.0.0.1:9955, or libapi"`
 	Serialization string `toml:"serialization" flag:"serialization" default:"cbor" enum:"json,cbor" usage:"serialization for requests and attestation reports"`
 }
 

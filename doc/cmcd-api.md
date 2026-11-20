@@ -2,7 +2,7 @@
 
 This document describes the *cmcd* APIs. For documentation, where this API is used, refer to
 [Architecture](./architecture.md). The *cmcd* provides a [gRPC](https://grpc.io/) and a socket API.
-The socket api supports TCP as well as
+Both APIs support TCP as well as
 [Unix domain sockets](https://man7.org/linux/man-pages/man7/unix.7.html).
 
 The gRPC API uses [protobuf](https://protobuf.dev/) for serialization. The socket API supports
