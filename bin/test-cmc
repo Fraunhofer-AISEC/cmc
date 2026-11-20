@@ -235,7 +235,8 @@ else
     omsp_args=()
 fi
 
-protocols=("grpc" "socket")
+# CMC API endpoints, each API is tested via TCP and unix domain socket
+endpoints=("grpc://127.0.0.1:9955" "grpc://${log_dir}/cmcd.sock" "socket://127.0.0.1:9955" "socket://${log_dir}/cmcd.sock")
 
 commands_server=("generate" "listen" "serve")
 
@@ -328,9 +329,14 @@ do
         do
             for omsp_serializer in "${omsp_serializers[@]}"
             do
-                for i in "${!protocols[@]}"
+                for endpoint in "${endpoints[@]}"
                 do
-                    cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}.log"
+                    api="${endpoint%%://*}"
+                    transport="tcp"
+                    if [[ "${endpoint#*://}" == /* ]]; then
+                        transport="unix"
+                    fi
+                    cmc_log="${log_dir}/cmcd_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${api}_${transport}.log"
 
                     omsp_format=()
                     if [[ "${include_omsp}" == "true" ]]; then
@@ -342,7 +348,7 @@ do
                         "${cmc_params[@]}" \
                         --log-file "${cmc_log}" \
                         "${omsp_format[@]}" \
-                        --cmc "${protocols[i]}://127.0.0.1:9955" \
+                        --cmc "${endpoint}" \
                         < /dev/null > "${cmc_log}.out" 2>&1 \
                         &
                     cmc_pid="$!"
@@ -352,16 +358,16 @@ do
 
                     for j in "${!commands_server[@]}"
                     do
-                        server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}_${commands_server[j]}.log"
-                        client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${protocols[i]}_${commands_client[j]}.log"
+                        server_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${api}_${transport}_${commands_server[j]}.log"
+                        client_log="${log_dir}/cmcctl_${success}_${ar_serializer}_${api_serializer}_${omsp_serializer}_${api}_${transport}_${commands_client[j]}.log"
 
-                        printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | OMSP %s | API %-6s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${omsp_serializer}" "${protocols[i]}"
+                        printf "TEST CMD %-8s | ATT %-7s | AR %s | SER %s | OMSP %s | API %-6s | NET %s\t" "${commands_client[j]}" "${success}" "${ar_serializer}" "${api_serializer}" "${omsp_serializer}" "${api}" "${transport}"
 
                         setsid -w cmcctl \
                             "${commands_server[j]}" \
                             "${cmcctl_params[@]}" \
                             --log-file "${server_log}" \
-                            --cmc "${protocols[i]}://127.0.0.1:9955" \
+                            --cmc "${endpoint}" \
                             --serialization ${api_serializer} \
                             ${commands_params_server[j]} \
                             < /dev/null > "${server_log}.out" 2>&1 \
@@ -375,7 +381,7 @@ do
                             "${cmcctl_params[@]}" \
                             --log-file "${client_log}" \
                             --serialization "${api_serializer}" \
-                            --cmc "${protocols[i]}://127.0.0.1:9955" \
+                            --cmc "${endpoint}" \
                             ${commands_params_client[j]} \
                             < /dev/null > "${client_log}.out" 2>&1
                         set -e

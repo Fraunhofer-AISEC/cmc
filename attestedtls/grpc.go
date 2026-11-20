@@ -29,7 +29,6 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	api "github.com/Fraunhofer-AISEC/cmc/grpcapi"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type GrpcApi struct{}
@@ -43,7 +42,7 @@ func getCMCServiceConn(cc *CmcConfig) (api.CMCServiceClient, *grpc.ClientConn, e
 	if cc == nil {
 		return nil, nil, fmt.Errorf("internal error: cmc config object is nil")
 	}
-	conn, err := grpc.NewClient(cc.CmcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := api.NewClient(cc.CmcAddr)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to connect: %v", err)
 	}
