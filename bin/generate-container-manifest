@@ -62,7 +62,7 @@ if declare -p remaining &>/dev/null; then
   args=("${remaining[@]:2}")
 fi
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 out="${data}/metadata-raw"
 
 runc_config="/etc/runc-measure-conf.json"

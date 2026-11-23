@@ -166,7 +166,7 @@ done
 mkdir -p "${data}"
 
 # Generate an example PKI
-[ -d "${dir}/data/pki" ] || {
+[ -d "${CMC_DATA:-${dir}/data}/pki" ] || {
 	printf "[\033[34;1m EXEC \033[0m] Generating PKI..\n"
 	"${dir}/bin/setup-pki"
 }
@@ -222,7 +222,7 @@ genisoimage -output "${data}/images/seed.iso" -volid cidata -joliet -rock \
     "$(command -v cmcd)" \
     "$(command -v cmcctl)" \
     "$(command -v mrtool)" \
-    "${dir}/data/pki/ca.pem" \
+    "${CMC_DATA:-${dir}/data}/pki/ca.pem" \
     "${vm_config}/metadata-ca.pem"
 rm -rf "${seed}"
 

@@ -10,7 +10,7 @@ require_bins metatool
 
 name="${1:-test-image}"
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 out="${data}/metadata-raw"
 
 if [[ ! -d "${data}" ]]; then

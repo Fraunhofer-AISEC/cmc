@@ -5,7 +5,10 @@ set -euo pipefail
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 source "${dir}/bin/utils.sh"
 
-data="${dir}/data"
+# The tests use their own data directory, as they also generate metadata that intentionally fails
+# verification. The helper scripts pick it up via CMC_DATA
+data="${dir}/data-test"
+export CMC_DATA="${data}"
 
 usage() {
     echo "Usage: $(basename "$0") [--include-omsp]"
@@ -153,9 +156,14 @@ check_message() {
 }
 
 
-if [[ ! -d "${data}" ]]; then
-  echo "Data directory ${data} does not exist. Did you run the setup-cmc script? Abort.."
-  exit 1
+if [[ ! -d "${data}/pki" ]]; then
+    require_bins cfssl cfssljson
+    echo "Generating PKI in ${data}/pki..."
+    mkdir -p "${data}"
+    "${dir}/bin/setup-pki" > "${data}/setup-pki.log" 2>&1 || {
+        echo "PKI generation failed, see ${data}/setup-pki.log"
+        exit 1
+    }
 fi
 
 log_dir="${data}/logs"
@@ -216,8 +224,8 @@ cmcctl_params=(
 )
 
 # Subcommand-scoped cmcctl options, only accepted by the subcommands they apply to
-report_params="--report attestation-report --nonce nonce"
-result_params="--result attestation-result.json"
+report_params="--report ${data}/attestation-report --nonce ${data}/nonce"
+result_params="--result ${data}/attestation-result.json"
 tls_params="--mtls --attest mutual --key-config ec256 --key-type tpm --key-id ${data}/key-id"
 
 attest_success=("success" "fail")

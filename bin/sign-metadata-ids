@@ -13,7 +13,7 @@ if [[ "$#" -ne 1 ]]; then
    exit 1
 fi
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 input="${data}/metadata-raw"
 tmp="${data}/metadata-tmp"
 out="${data}/metadata-signed"
