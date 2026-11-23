@@ -36,7 +36,7 @@ done
 
 artifacts="${args[0]}"
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 out="${data}/metadata-raw"
 
 name="de.test.host-apps"

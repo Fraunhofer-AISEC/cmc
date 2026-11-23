@@ -40,7 +40,7 @@ if [[ ! -d "${artifacts}" ]]; then
   exit 1
 fi
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 out="${data}/metadata-raw"
 image_description_path="${out}/image.description.json"
 

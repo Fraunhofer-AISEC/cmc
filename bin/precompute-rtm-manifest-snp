@@ -43,7 +43,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 out="${data}/metadata-raw"
 pki="${data}/pki"
 image_description_path="${out}/image.description.json"

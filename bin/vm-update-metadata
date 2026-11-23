@@ -15,7 +15,7 @@ cd "${dir}"
 mode="${1:-parse}"
 
 # Clean start
-rm -rf "${dir}/data/metadata-raw"
+rm -rf "${CMC_DATA:-${dir}/data}/metadata-raw"
 
 if [[ "${mode}" == "parse" ]]; then
   echo "Parsing metadata..."
@@ -34,8 +34,8 @@ fi
 
 mkdir -p "${dir}/example-setup/vm-config/vm-metadata/"
 
-cp "${dir}/data/metadata-signed/"* "${dir}/example-setup/vm-config/vm-metadata/"
-cp "${dir}/data/pki/ca.pem" "${dir}/example-setup/vm-config/metadata-ca.pem"
+cp "${CMC_DATA:-${dir}/data}/metadata-signed/"* "${dir}/example-setup/vm-config/vm-metadata/"
+cp "${CMC_DATA:-${dir}/data}/pki/ca.pem" "${dir}/example-setup/vm-config/metadata-ca.pem"
 
 # Delete cmcd data to enforce new certificate generation
 "${dir}/bin/vm-ssh" rm -rf /var/lib/cmc/cmcd

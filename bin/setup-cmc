@@ -47,7 +47,7 @@ fi
 
 require_bins metatool mrtool
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 
 if [[ -d "${data}" ]]; then
   echo "Data directory ${data} does already exist. Remove it for a fresh setup. Abort.."

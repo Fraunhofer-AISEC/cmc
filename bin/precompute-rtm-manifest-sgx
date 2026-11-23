@@ -27,7 +27,7 @@ while [[ $i -le $# ]]; do
   (( i++ ))
 done
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 out="${data}/metadata-raw"
 image_description_path="${out}/image.description.json"
 
