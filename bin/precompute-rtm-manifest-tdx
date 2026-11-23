@@ -57,7 +57,7 @@ acpi_rsdp="${artifacts}/etc-acpi-rsdp"
 acpi_tables="${artifacts}/etc-acpi-tables"
 table_loader="${artifacts}/etc-table-loader"
 
-data="${dir}/data"
+data="${CMC_DATA:-${dir}/data}"
 out="${data}/metadata-raw"
 image_description_path="${out}/image.description.json"
 

@@ -6,7 +6,7 @@ trap '[ $? -eq 0 ] && exit 0; printf "%s failed\n" "$0"' EXIT
 dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 input="${dir}/example-setup/pki-input-ids"
-out="${dir}/data/pki"
+out="${CMC_DATA:-${dir}/data}/pki"
 
 echo "Using ${input} as input directory"
 echo "Using ${out} as output directory"

@@ -4,6 +4,7 @@
 .vscode/
 
 /data/
+/data-test/
 /artifacts/
 /vm/
 /build/
