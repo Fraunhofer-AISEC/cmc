@@ -22,6 +22,8 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
@@ -346,4 +348,23 @@ func getJsonSerializer() Serializer {
 		log.Fatalf("test: failed to initialize json serializer: %v", err)
 	}
 	return s
+}
+
+// TestMetadataCborKeys checks that the structs embedded in Metadata use distinct CBOR keys, as
+// the CBOR encoder silently drops all fields with conflicting keys
+func TestMetadataCborKeys(t *testing.T) {
+	seen := make(map[string]string)
+	mt := reflect.TypeFor[Metadata]()
+	for i := range mt.NumField() {
+		embedded := mt.Field(i)
+		for j := range embedded.Type.NumField() {
+			f := embedded.Type.Field(j)
+			key, _, _ := strings.Cut(f.Tag.Get("cbor"), ",")
+			name := embedded.Name + "." + f.Name
+			if other, ok := seen[key]; ok {
+				t.Errorf("%v and %v share CBOR key %v", other, name, key)
+			}
+			seen[key] = name
+		}
+	}
 }
