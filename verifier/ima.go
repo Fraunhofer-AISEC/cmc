@@ -58,13 +58,15 @@ func VerifySwima(
 		result.Summary.Fail(ar.VerifyEvidence, err)
 		return result, false
 	}
-	tr, payload, ok := s.Verify(evidence.Data, pub)
-	if !ok {
+	payload, sigs, sigResult := s.Verify(evidence.Data, pub)
+	if len(sigs) > 0 {
+		result.Signature = sigs[0]
+	}
+	if sigResult.Status != ar.StatusSuccess {
 		log.Warnf("Failed to verify ima evidence")
 		result.Summary.Fail(ar.VerifyEvidence)
 		return result, false
 	}
-	result.Signature = tr.SignatureCheck[0]
 	log.Debug("Successfully verified IMA measurement signature")
 
 	imaEvidence := new(ar.SwEvidence)

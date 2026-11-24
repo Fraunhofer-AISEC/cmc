@@ -33,7 +33,7 @@ type Serializer interface {
 	GetPayload(raw []byte) ([]byte, error)
 	Marshal(v any) ([]byte, error)
 	Unmarshal(data []byte, v any) error
-	Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool)
+	Verify(data []byte, verifier Verifier) ([]byte, []SignatureResult, Result)
 	String() string
 }
 

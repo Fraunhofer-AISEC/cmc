@@ -35,10 +35,9 @@ func TestVerify(t *testing.T) {
 		s        Serializer
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want  Status
-		want1 bool
+		name string
+		args args
+		want Status
 	}{
 		{
 			name: "Success Verify Cert Chain JSON",
@@ -47,8 +46,7 @@ func TestVerify(t *testing.T) {
 				verifier: []*x509.Certificate{getCert(caPem)},
 				s:        getJsonSerializer(),
 			},
-			want:  StatusSuccess,
-			want1: true,
+			want: StatusSuccess,
 		},
 		{
 			name: "Success Verify Key JSON",
@@ -57,8 +55,7 @@ func TestVerify(t *testing.T) {
 				verifier: getPublicKey(leafKeyPem),
 				s:        getJsonSerializer(),
 			},
-			want:  StatusSuccess,
-			want1: true,
+			want: StatusSuccess,
 		},
 		{
 			name: "Fail Invalid Cert Chain Invalid CA JSON",
@@ -67,8 +64,7 @@ func TestVerify(t *testing.T) {
 				verifier: []*x509.Certificate{getCert(invalidCaPem)},
 				s:        getJsonSerializer(),
 			},
-			want:  StatusFail,
-			want1: false,
+			want: StatusFail,
 		},
 		{
 			name: "Fail Verify Key JSON",
@@ -77,8 +73,7 @@ func TestVerify(t *testing.T) {
 				verifier: getPublicKey(invalidLeafKeyPem),
 				s:        getJsonSerializer(),
 			},
-			want:  StatusFail,
-			want1: false,
+			want: StatusFail,
 		},
 		{
 			name: "Fail Verify Cert Chain Invalid Key JSON",
@@ -87,8 +82,7 @@ func TestVerify(t *testing.T) {
 				verifier: []*x509.Certificate{getCert(caPem)},
 				s:        getJsonSerializer(),
 			},
-			want:  StatusFail,
-			want1: false,
+			want: StatusFail,
 		},
 		{
 			name: "Success Verify Cert Chain CBOR",
@@ -97,8 +91,7 @@ func TestVerify(t *testing.T) {
 				verifier: []*x509.Certificate{getCert(caPem)},
 				s:        getCborSerializer(),
 			},
-			want:  StatusSuccess,
-			want1: true,
+			want: StatusSuccess,
 		},
 		{
 			name: "Success Verify Key CBOR",
@@ -107,8 +100,7 @@ func TestVerify(t *testing.T) {
 				verifier: getPublicKey(leafKeyPem),
 				s:        getCborSerializer(),
 			},
-			want:  StatusSuccess,
-			want1: true,
+			want: StatusSuccess,
 		},
 		{
 			name: "Fail Invalid Cert Chain Invalid CA CBOR",
@@ -117,8 +109,7 @@ func TestVerify(t *testing.T) {
 				verifier: []*x509.Certificate{getCert(invalidCaPem)},
 				s:        getCborSerializer(),
 			},
-			want:  StatusFail,
-			want1: false,
+			want: StatusFail,
 		},
 		{
 			name: "Fail Verify Key CBOR",
@@ -127,8 +118,7 @@ func TestVerify(t *testing.T) {
 				verifier: getPublicKey(invalidLeafKeyPem),
 				s:        getCborSerializer(),
 			},
-			want:  StatusFail,
-			want1: false,
+			want: StatusFail,
 		},
 		{
 			name: "Fail Verify Cert Chain Invalid Key CBOR",
@@ -137,8 +127,7 @@ func TestVerify(t *testing.T) {
 				verifier: []*x509.Certificate{getCert(caPem)},
 				s:        getCborSerializer(),
 			},
-			want:  StatusFail,
-			want1: false,
+			want: StatusFail,
 		},
 	}
 
@@ -150,12 +139,9 @@ func TestVerify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			// FUT: Verify
-			got, _, got1 := tt.args.s.Verify(tt.args.data, tt.args.verifier)
-			if got.Summary.Status != tt.want {
-				t.Errorf("Result.Success = %v, want %v", got.Summary.Status, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("ok = %v, want %v", got1, tt.want)
+			_, _, got := tt.args.s.Verify(tt.args.data, tt.args.verifier)
+			if got.Status != tt.want {
+				t.Errorf("Result.Status = %v, want %v", got.Status, tt.want)
 			}
 		})
 	}

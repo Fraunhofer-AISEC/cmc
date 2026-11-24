@@ -100,8 +100,12 @@ func ParseAndVerifyMetadataItem(hash string, meta []byte, cas []*x509.Certificat
 	}
 	log.Tracef("Detected %v serialization", s.String())
 
-	result, payload, ok := s.Verify(meta, cas)
-	if !ok {
+	payload, sigs, sigResult := s.Verify(meta, cas)
+	result := MetadataResult{
+		Summary:        sigResult,
+		SignatureCheck: sigs,
+	}
+	if sigResult.Status != StatusSuccess {
 		log.Warnf("Signature verification of metadata item %v failed", hash)
 		// Still unpack metadata item for validation-result diagnosis
 		payload, err = s.GetPayload(meta)
