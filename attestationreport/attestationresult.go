@@ -841,9 +841,10 @@ func (r *Result) Fail(code ErrorCode, errs ...error) {
 	if code != NotSpecified {
 		r.ErrorCodes = append(r.ErrorCodes, code)
 	}
-	if len(errs) > 0 {
-		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
-		log.Warnf("Verification failed with error code %v: %v", code.String(), r.Details)
+	if err := errors.Join(errs...); err != nil {
+		msg := err.Error()
+		r.appendDetails(msg)
+		log.Warnf("Verification failed with error code %v: %v", code.String(), msg)
 	} else if code != NotSpecified {
 		log.Warnf("Verification failed with error code %v", code.String())
 	} else {
@@ -859,13 +860,22 @@ func (r *Result) Warn(code ErrorCode, errs ...error) {
 	if code != NotSpecified {
 		r.ErrorCodes = append(r.ErrorCodes, code)
 	}
-	if len(errs) > 0 {
-		r.Details = fmt.Sprintf("%v", errors.Join(errs...))
-		log.Warnf("Verification passed with warning %v: %v", code.String(), r.Details)
+	if err := errors.Join(errs...); err != nil {
+		msg := err.Error()
+		r.appendDetails(msg)
+		log.Warnf("Verification passed with warning %v: %v", code.String(), msg)
 	} else if code != NotSpecified {
 		log.Warnf("Verification passed with warning %v", code.String())
 	} else {
 		log.Warnf("Verification passed with warning")
+	}
+}
+
+func (r *Result) appendDetails(msg string) {
+	if r.Details == "" {
+		r.Details = msg
+	} else {
+		r.Details += "; " + msg
 	}
 }
 
