@@ -80,25 +80,6 @@ func NewDatabase(path string) (*Database, error) {
 		return nil, fmt.Errorf("failed to create sqlite3 database index index_metadata_type_name_version: %w", err)
 	}
 
-	// check if the hash table already exists or create it (without rowid to guarantee smaller storage with no real trade-offs)
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS map_hash (
-	algorithm TEXT NOT NULL,
-	hash TEXT NOT NULL,
-	manifest_id TEXT NOT NULL,
-	PRIMARY KEY(algorithm, hash, manifest_id)
-	) WITHOUT ROWID`); err != nil {
-		return nil, fmt.Errorf("failed to create sqlite3 database table map_hash: %w", err)
-	}
-
-	// check if the image table already exists or create it (without rowid to guarantee smaller storage with no real trade-offs)
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS map_image (
-	manifest_name TEXT NOT NULL,
-	image_id TEXT NOT NULL,
-	PRIMARY KEY(manifest_name, image_id)
-	) WITHOUT ROWID`); err != nil {
-		return nil, fmt.Errorf("failed to create sqlite3 database table map_image: %w", err)
-	}
-
 	return &Database{db: db}, nil
 }
 
@@ -167,16 +148,9 @@ func (db *Database) fetch(query string, args ...any) (*DatabaseEntry, error) {
 }
 
 func (db *Database) Insert(entry *DatabaseEntry, hashes []DatabaseHash, manifests []string) (bool, error) {
-	// start the transactional insertion (transactional, as multiple insertions are part of this operation)
-	tx, err := db.db.Begin()
-	if err != nil {
-		return false, fmt.Errorf("failed to begin sqlite3 transaction: %w", err)
-	}
-	defer tx.Rollback()
-
 	// try to insert the entry into the table
 	exec := fmt.Sprintf(`INSERT OR IGNORE INTO metadata (%v) VALUES (?, ?, ?, ?, ?, ?, ?)`, tableFullQuery)
-	res, err := tx.Exec(exec, entry.Id, entry.Type, entry.Name, entry.Version, entry.VersionTime, entry.Created, entry.Raw)
+	res, err := db.db.Exec(exec, entry.Id, entry.Type, entry.Name, entry.Version, entry.VersionTime, entry.Created, entry.Raw)
 	if err != nil {
 		return false, fmt.Errorf("failed to insert into sqlite3 database: %w", err)
 	}
@@ -189,128 +163,7 @@ func (db *Database) Insert(entry *DatabaseEntry, hashes []DatabaseHash, manifest
 	if count == 0 {
 		return false, nil
 	}
-
-	// insert all of the hashes mapping back to the entry
-	if len(hashes) > 0 {
-		stmt, err := tx.Prepare("INSERT OR IGNORE INTO map_hash (algorithm, hash, manifest_id) VALUES (?, ?, ?)")
-		if err != nil {
-			return false, fmt.Errorf("failed to prepare hash insertion: %w", err)
-		}
-		defer stmt.Close()
-		for _, hash := range hashes {
-			if _, err := stmt.Exec(hash.Algorithm, hash.Hash, entry.Id); err != nil {
-				return false, fmt.Errorf("failed to insert hash into sqlite3 database: %w", err)
-			}
-		}
-	}
-
-	// insert all of the referenced manifest names mapping back to the entry
-	if len(manifests) > 0 {
-		stmt, err := tx.Prepare("INSERT OR IGNORE INTO map_image (manifest_name, image_id) VALUES (?, ?)")
-		if err != nil {
-			return false, fmt.Errorf("failed to prepare image insertion: %w", err)
-		}
-		defer stmt.Close()
-		for _, name := range manifests {
-			if _, err := stmt.Exec(name, entry.Id); err != nil {
-				return false, fmt.Errorf("failed to insert image mapping into sqlite3 database: %w", err)
-			}
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return false, fmt.Errorf("failed to commit sqlite3 transaction: %w", err)
-	}
 	return true, nil
-}
-
-func (db *Database) ResolveHashes(hashes []DatabaseHash) ([]DatabaseHashMatch, error) {
-	// start a read transaction to reduce the strain on the database and ensure one consistent state
-	tx, err := db.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin sqlite3 transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// create the corresponding query for any metadata (manifests) matching the hashes
-	stmt, err := tx.Prepare(fmt.Sprintf(`SELECT h.algorithm, h.hash, %v FROM
-	map_hash AS h INNER JOIN metadata AS d ON h.manifest_id = d.id
-	WHERE h.algorithm = ? AND h.hash = ?`, tableInfoQuery))
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare sqlite3 hash resolution: %w", err)
-	}
-	defer stmt.Close()
-
-	// look up each unique hash and collect the matches
-	matches, seen := []DatabaseHashMatch{}, make(map[DatabaseHash]bool)
-	for _, hash := range hashes {
-		if seen[hash] {
-			continue
-		}
-		seen[hash] = true
-
-		// perform the actual query and unpack the found rows
-		rows, err := stmt.Query(hash.Algorithm, hash.Hash)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve hash from sqlite3 database: %w", err)
-		}
-		if entries, err := rowsToEntries(rows, func(entry *DatabaseHashMatch) error {
-			return rows.Scan(&entry.Algorithm, &entry.Hash, &entry.Id, &entry.Type, &entry.Name, &entry.Version, &entry.VersionTime, &entry.Created)
-		}); err != nil {
-			return nil, err
-		} else {
-			matches = append(matches, entries...)
-		}
-	}
-	return matches, nil
-}
-
-func (db *Database) ResolveImages(names []string) ([]DatabaseInfo, error) {
-	// start a read transaction to reduce the strain on the database and ensure one consistent state
-	tx, err := db.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin sqlite3 transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// create the corresponding query for any image descriptions referencing the manifest name
-	stmt, err := tx.Prepare(fmt.Sprintf(`SELECT %v FROM
-	map_image AS i INNER JOIN metadata AS d ON i.image_id = d.id
-	WHERE i.manifest_name = ?`, tableInfoQuery))
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare sqlite3 image resolution: %w", err)
-	}
-	defer stmt.Close()
-
-	// look up each unique name and collect the images which reference it
-	images, seenNames, seenImages := []DatabaseInfo{}, make(map[string]bool), make(map[string]bool)
-	for _, name := range names {
-		if seenNames[name] {
-			continue
-		}
-		seenNames[name] = true
-
-		// perform the actual query and unpack the images
-		rows, err := stmt.Query(name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve image from sqlite3 database: %w", err)
-		}
-		found, err := rowsToEntries(rows, func(info *DatabaseInfo) error {
-			return rows.Scan(&info.Id, &info.Type, &info.Name, &info.Version, &info.VersionTime, &info.Created)
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		// add all unique images to the output list
-		for _, image := range found {
-			if !seenImages[image.Id] {
-				seenImages[image.Id] = true
-				images = append(images, image)
-			}
-		}
-	}
-	return images, nil
 }
 
 func rowsToEntries[T any](rows *sql.Rows, unpack func(*T) error) ([]T, error) {

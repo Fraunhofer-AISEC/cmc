@@ -86,8 +86,6 @@ func (s *Server) handleDispatch(req *http.Request, resp http.ResponseWriter) {
 		s.handleUpload(req, resp)
 	case req.Method == "POST" && req.URL.Path == "/query":
 		s.handleQuery(req, resp)
-	case req.Method == "POST" && req.URL.Path == "/resolve":
-		s.handleResolve(req, resp)
 	case req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/metadata/"):
 		s.handleFetchId(resp, strings.TrimPrefix(req.URL.Path, "/metadata/"))
 	case req.Method == "GET" && kindOk:
@@ -370,42 +368,6 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 	resp.Header().Set("Content-Type", "application/json; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
 	json.NewEncoder(resp).Encode(queryResponse)
-}
-func (s *Server) handleResolve(req *http.Request, resp http.ResponseWriter) {
-	log.Trace("Resolving measurements")
-
-	// read the request body and parse it
-	body := handleReadUpload(req, resp, "application/json")
-	if body == nil {
-		return
-	}
-	resolveRequest := &ResolveRequest{}
-	if err := json.Unmarshal(body, resolveRequest); err != nil {
-		handleBadRequest(resp, "malformed request body: %v", err)
-		return
-	}
-
-	// validate the consistency and version of the request and sanitize the inputs
-	if resolveRequest.Version != ApiVersion {
-		handleBadRequest(resp, "unsupported API version [%v] only %v supported", resolveRequest.Version, ApiVersion)
-		return
-	}
-	for i, measurement := range resolveRequest.Measurements {
-		if measurement.Algorithm == "" {
-			handleBadRequest(resp, "malformed algorithm (%v)", measurement.Algorithm)
-			return
-		}
-		if !RegexHashCheck.MatchString(measurement.Hash) {
-			handleBadRequest(resp, "malformed hash (%v)", measurement.Hash)
-			return
-		}
-		resolveRequest.Measurements[i].Algorithm = strings.ToLower(measurement.Algorithm)
-		resolveRequest.Measurements[i].Hash = strings.ToLower(measurement.Hash)
-	}
-
-	// send the query result as json encoded back
-	resp.WriteHeader(http.StatusInternalServerError)
-	resp.Write([]byte("Not yet implemented"))
 }
 func (s *Server) handleFetchId(resp http.ResponseWriter, id string) {
 	log.Tracef("Fetching metadata for [id: %v]", id)
