@@ -18,16 +18,20 @@ package attestationreport
 import (
 	"crypto/x509"
 	"fmt"
+	"maps"
+	"slices"
 	"time"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-// ParseAndVerifyMetadata takes the metadata map with keys being the hashes of the raw metadata
+// ParseAndVerifyMetadata takes the metadata map with keys being the digests of the raw metadata
 // items and a set of CAs and performs a validity, signature and certificate chain validation, as
 // well as compatibility checks: The image description must reference all manifests, and starting
 // from an inherently trusted root manifest, all manifests must have a compatible base layer.
 // It optionally also checks that none of the manifests have been revoked based on the OMSP response.
+// Multiple image descriptions, company descriptions or OMSP responses for the same server are
+// rejected and recorded in the unknown results.
 func ParseAndVerifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
 	checkOmsp bool,
 ) (MetadataSummary, Status) {
@@ -35,34 +39,56 @@ func ParseAndVerifyMetadata(cas []*x509.Certificate, metadatamap map[string][]by
 	results := MetadataSummary{}
 	success := StatusSuccess
 
-	omspMap := make(map[string]Metadata)
+	var imageDescriptions, companyDescriptions []MetadataResult
+	omspResponses := make(map[string][]MetadataResult)
 
-	for hash, meta := range metadatamap {
+	for _, digest := range slices.Sorted(maps.Keys(metadatamap)) {
 
-		result := ParseAndVerifyMetadataItem(hash, meta, cas)
+		result := ParseAndVerifyMetadataItem(digest, metadatamap[digest], cas)
 		if result.Summary.Status != StatusSuccess {
 			success = StatusFail
 		}
 
 		switch result.Metadata.Type {
 		case TYPE_IMAGE_DESCRIPTION:
-			results.ImageDescriptionResult = result
+			imageDescriptions = append(imageDescriptions, result)
 		case TYPE_COMPANY_DESCRIPTION:
-			results.CompanyDescriptionResult = &result
+			companyDescriptions = append(companyDescriptions, result)
 		case TYPE_MANIFEST:
-			if checkOmsp {
-				result.ManifestHash = hash
-			}
 			results.ManifestResults = append(results.ManifestResults, result)
 		case TYPE_OMSP_RESPONSE:
-			omspMap[result.Server] = result.Metadata
-			results.OmspResults = append(results.OmspResults, result)
+			omspResponses[result.Server] = append(omspResponses[result.Server], result)
 		default:
 			results.UnknownResults = append(results.UnknownResults, result)
 			log.Warnf("Unknown manifest type %v", result.Metadata.Type)
 			success = StatusFail
 		}
-		log.Tracef("Finished validation of metadata item %v: %v", hash, result.Summary.Status)
+		log.Tracef("Finished validation of metadata item %v: %v", digest, result.Summary.Status)
+	}
+
+	if unique, ok := results.selectUnique(imageDescriptions, MultipleImageDescriptions); ok {
+		if unique != nil {
+			results.ImageDescriptionResult = *unique
+		}
+	} else {
+		success = StatusFail
+	}
+
+	if unique, ok := results.selectUnique(companyDescriptions, MultipleCompanyDescriptions); ok {
+		results.CompanyDescriptionResult = unique
+	} else {
+		success = StatusFail
+	}
+
+	omspMap := make(map[string]Metadata)
+	for _, server := range slices.Sorted(maps.Keys(omspResponses)) {
+		unique, ok := results.selectUnique(omspResponses[server], MultipleOmspResponses)
+		if !ok {
+			success = StatusFail
+			continue
+		}
+		omspMap[server] = unique.Metadata
+		results.OmspResults = append(results.OmspResults, *unique)
 	}
 
 	if checkOmsp {
@@ -78,15 +104,33 @@ func ParseAndVerifyMetadata(cas []*x509.Certificate, metadatamap map[string][]by
 	return results, success
 }
 
+// selectUnique returns the only item of candidates, or nil if there is none. If there are multiple
+// items, all of them fail with the given error code and are moved to the unknown results.
+func (s *MetadataSummary) selectUnique(candidates []MetadataResult, code ErrorCode,
+) (*MetadataResult, bool) {
+	switch len(candidates) {
+	case 0:
+		return nil, true
+	case 1:
+		return &candidates[0], true
+	}
+	for _, c := range candidates {
+		log.Warnf("Found multiple %v items: %v (digest %v)", c.Type, c.Name, c.Digest)
+		c.Summary.Fail(code)
+		s.UnknownResults = append(s.UnknownResults, c)
+	}
+	return nil, false
+}
+
 // ParseAndVerifyMetadataItem detects the serialization of a single raw metadata item, verifies its
 // signature against the CAs, unpacks it and checks its validity period. Failures are recorded in
-// the returned result. The hash is only used for logging.
-func ParseAndVerifyMetadataItem(hash string, meta []byte, cas []*x509.Certificate) MetadataResult {
-	log.Tracef("Validating metadata item %v...", hash)
+// the returned result, which also records the digest of the item.
+func ParseAndVerifyMetadataItem(digest string, meta []byte, cas []*x509.Certificate) MetadataResult {
+	log.Tracef("Validating metadata item %v...", digest)
 
 	s, err := DetectSerialization(meta)
 	if err != nil {
-		result := MetadataResult{}
+		result := MetadataResult{Digest: digest}
 		result.Summary.Fail(ExtractPayload, err)
 		return result
 	}
@@ -94,11 +138,12 @@ func ParseAndVerifyMetadataItem(hash string, meta []byte, cas []*x509.Certificat
 
 	payload, sigs, sigResult := s.Verify(meta, cas)
 	result := MetadataResult{
+		Digest:         digest,
 		Summary:        sigResult,
 		SignatureCheck: sigs,
 	}
 	if sigResult.Status != StatusSuccess {
-		log.Warnf("Signature verification of metadata item %v failed", hash)
+		log.Warnf("Signature verification of metadata item %v failed", digest)
 		// Still unpack metadata item for validation-result diagnosis
 		payload, err = s.GetPayload(meta)
 		if err != nil {
@@ -107,7 +152,7 @@ func ParseAndVerifyMetadataItem(hash string, meta []byte, cas []*x509.Certificat
 			log.Trace("Extracted unverified JWS payload")
 		}
 	} else {
-		log.Tracef("Signature verification of metadata item %v successful", hash)
+		log.Tracef("Signature verification of metadata item %v successful", digest)
 	}
 
 	err = s.Unmarshal(payload, &result.Metadata)
@@ -462,8 +507,8 @@ func checkManifestRevocation(manifestResults []MetadataResult, omspMap map[strin
 	for i := range manifestResults {
 		elem := &manifestResults[i]
 		if elem.OmspServer == "" {
-			log.Debugf("Manifest %v with hash %v does not contain omsp request URL. Ignore",
-				elem.Name, elem.ManifestHash)
+			log.Debugf("Manifest %v with digest %v does not contain omsp request URL. Ignore",
+				elem.Name, elem.Digest)
 			elem.Summary.Details = elem.Summary.Details +
 				("Revocation check for manifest was not possible, because manifest contains no OmspServer URL.")
 			continue
@@ -472,10 +517,10 @@ func checkManifestRevocation(manifestResults []MetadataResult, omspMap map[strin
 		omspFound := false
 		for _, resp := range omspMap[elem.OmspServer].Responses {
 
-			if resp.ManifestHash == elem.ManifestHash {
+			if resp.ManifestHash == elem.Digest {
 				omspFound = true
 
-				log.Debugf("Found OMSP Response for Manifest %v (%v)", elem.Name, elem.ManifestHash)
+				log.Debugf("Found OMSP Response for Manifest %v (%v)", elem.Name, elem.Digest)
 				elem.OmspValidity = checkOmspValidity(resp.ThisUpdate, resp.NextUpdate)
 				if elem.OmspValidity.Status == StatusFail {
 					log.Debugf("Check for validity of the omsp response failed with error code(s) %v", elem.OmspValidity.ErrorCodes)
@@ -508,7 +553,7 @@ func checkManifestRevocation(manifestResults []MetadataResult, omspMap map[strin
 			}
 		}
 		if !omspFound {
-			log.Debugf("For %v (hash: %v) no revocation information was provided", elem.Name, elem.ManifestHash)
+			log.Debugf("For %v (digest: %v) no revocation information was provided", elem.Name, elem.Digest)
 			elem.OmspStatus = &Result{}
 			elem.OmspStatus.Fail(ManifestRevocationUnknown)
 		}

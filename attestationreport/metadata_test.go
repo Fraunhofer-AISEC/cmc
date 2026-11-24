@@ -16,10 +16,186 @@
 package attestationreport
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/hex"
+	"math/big"
+	"slices"
 	"testing"
+	"time"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
+
+func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
+	logrus.SetLevel(logrus.TraceLevel)
+
+	key, chain := createTestCertChain(t)
+	s := getJsonSerializer()
+
+	sign := func(m any) (string, []byte) {
+		data, err := s.Marshal(m)
+		if err != nil {
+			t.Fatalf("failed to marshal metadata: %v", err)
+		}
+		signed, err := internal.Sign(data, key, s.String(), chain)
+		if err != nil {
+			t.Fatalf("failed to sign metadata: %v", err)
+		}
+		digest := sha256.Sum256(signed)
+		return hex.EncodeToString(digest[:]), signed
+	}
+
+	// Variants differ in their version only, resulting in different digests
+	withVersion := func(m Metadata, version string) Metadata {
+		m.Version = version
+		return m
+	}
+
+	companyDescription := Metadata{
+		MetaInfo: MetaInfo{
+			Type:     TYPE_COMPANY_DESCRIPTION,
+			Name:     "Test Company Description",
+			Version:  "2023-04-10T20:00:00Z",
+			Validity: validMetaInfo.Validity,
+		},
+	}
+
+	rtmDigest, rtm := sign(validRtmManifest)
+	omspResponse := func(producedAt string) Metadata {
+		return Metadata{
+			MetaInfo: MetaInfo{Type: TYPE_OMSP_RESPONSE},
+			OmspResponse: OmspResponse{
+				Server:     validRtmManifest.OmspServer,
+				ProducedAt: producedAt,
+				Responses: []SingleOmspResponse{{
+					ManifestHash: rtmDigest,
+					Status:       OmspStatusGood,
+					ThisUpdate:   "2025-04-01T20:00:00Z",
+				}},
+			},
+		}
+	}
+
+	base := func(extra ...any) map[string][]byte {
+		items := map[string][]byte{rtmDigest: rtm}
+		for _, m := range append([]any{validOsManifest, validAppManifest}, extra...) {
+			digest, signed := sign(m)
+			items[digest] = signed
+		}
+		return items
+	}
+
+	tests := []struct {
+		name      string
+		items     map[string][]byte
+		checkOmsp bool
+		want      Status
+		wantCode  ErrorCode
+		check     func(t *testing.T, got MetadataSummary)
+	}{
+		{
+			name: "Unique Items",
+			items: base(validImageDescription, companyDescription,
+				omspResponse("2025-04-01T20:00:00Z")),
+			checkOmsp: true,
+			want:      StatusSuccess,
+			check: func(t *testing.T, got MetadataSummary) {
+				if got.ImageDescriptionResult.Name != validImageDescription.Name {
+					t.Errorf("image description %q, want %q",
+						got.ImageDescriptionResult.Name, validImageDescription.Name)
+				}
+				if got.CompanyDescriptionResult == nil {
+					t.Errorf("company description missing")
+				}
+				if len(got.OmspResults) != 1 {
+					t.Errorf("got %v OMSP results, want 1", len(got.OmspResults))
+				}
+				for _, m := range got.ManifestResults {
+					if m.Digest == "" {
+						t.Errorf("manifest %v has no digest", m.Name)
+					}
+				}
+			},
+		},
+		{
+			name: "Multiple Image Descriptions",
+			items: base(validImageDescription,
+				withVersion(validImageDescription, "2024-01-01T00:00:00Z")),
+			want:     StatusFail,
+			wantCode: MultipleImageDescriptions,
+			check: func(t *testing.T, got MetadataSummary) {
+				if got.ImageDescriptionResult.Name != "" {
+					t.Errorf("image description %q selected despite duplicates",
+						got.ImageDescriptionResult.Name)
+				}
+			},
+		},
+		{
+			name: "Multiple Company Descriptions",
+			items: base(validImageDescription, companyDescription,
+				withVersion(companyDescription, "2024-01-01T00:00:00Z")),
+			want:     StatusFail,
+			wantCode: MultipleCompanyDescriptions,
+			check: func(t *testing.T, got MetadataSummary) {
+				if got.CompanyDescriptionResult != nil {
+					t.Errorf("company description selected despite duplicates")
+				}
+			},
+		},
+		{
+			name: "Multiple OMSP Responses",
+			items: base(validImageDescription, omspResponse("2025-04-01T20:00:00Z"),
+				omspResponse("2025-04-02T20:00:00Z")),
+			checkOmsp: true,
+			want:      StatusFail,
+			wantCode:  MultipleOmspResponses,
+			check: func(t *testing.T, got MetadataSummary) {
+				if len(got.OmspResults) != 0 {
+					t.Errorf("got %v OMSP results despite duplicates", len(got.OmspResults))
+				}
+				rtmResult := RootManifest(got.ManifestResults)
+				if rtmResult.OmspStatus == nil ||
+					!slices.Contains(rtmResult.OmspStatus.ErrorCodes, ManifestRevocationUnknown) {
+					t.Errorf("RTM revocation status %v, want %v",
+						rtmResult.OmspStatus, ManifestRevocationUnknown)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, status := ParseAndVerifyMetadata([]*x509.Certificate{chain[len(chain)-1]},
+				tt.items, tt.checkOmsp)
+			if status != tt.want {
+				t.Errorf("status = %v, want %v", status, tt.want)
+			}
+			if tt.wantCode != NotSpecified {
+				if len(got.UnknownResults) != 2 {
+					t.Fatalf("got %v unknown results, want 2", len(got.UnknownResults))
+				}
+				for _, r := range got.UnknownResults {
+					if !slices.Contains(r.Summary.ErrorCodes, tt.wantCode) {
+						t.Errorf("unknown result %v error codes %v, want %v",
+							r.Name, r.Summary.ErrorCodes, tt.wantCode)
+					}
+					if r.Digest == "" {
+						t.Errorf("unknown result %v has no digest", r.Name)
+					}
+				}
+			} else if len(got.UnknownResults) != 0 {
+				t.Errorf("got %v unknown results, want 0", len(got.UnknownResults))
+			}
+			tt.check(t, got)
+		})
+	}
+}
 
 func Test_checkMetadataCompatibility(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
@@ -464,3 +640,50 @@ var (
 		},
 	}
 )
+
+func createTestCertChain(t *testing.T) (*ecdsa.PrivateKey, []*x509.Certificate) {
+	t.Helper()
+
+	create := func(tmpl, parent *x509.Certificate, pub *ecdsa.PublicKey, signer *ecdsa.PrivateKey,
+	) *x509.Certificate {
+		der, err := x509.CreateCertificate(rand.Reader, tmpl, parent, pub, signer)
+		if err != nil {
+			t.Fatalf("failed to create certificate: %v", err)
+		}
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			t.Fatalf("failed to parse certificate: %v", err)
+		}
+		return cert
+	}
+
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	caTmpl := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Test CA"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	ca := create(caTmpl, caTmpl, &caKey.PublicKey, caKey)
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	leaf := create(&x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: "Test Signer"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}, ca, &key.PublicKey, caKey)
+
+	return key, []*x509.Certificate{leaf, ca}
+}
