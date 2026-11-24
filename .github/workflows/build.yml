@@ -55,6 +55,15 @@ jobs:
           pushd tools/mrtool
           go build -ldflags="-s -w" -trimpath
           popd
+      - name: API Docs Check
+        run: |
+          ./bin/update-api
+          if [ -n "$(git status --porcelain doc/api)" ]; then
+            git status --porcelain doc/api
+            git diff doc/api
+            echo "::error::API documentation is outdated. Run bin/update-api and commit the changes."
+            exit 1
+          fi
       - name: Vet Check
         run: go vet ./...
       - name: Format Check
