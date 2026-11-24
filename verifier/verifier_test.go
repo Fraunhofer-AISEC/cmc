@@ -456,14 +456,10 @@ func TestVerify(t *testing.T) {
 
 			// Run FUT
 			log.Info("Running FUT")
-			got := Verify(
-				data, tt.args.verifierNonce,
-				nil, PolicyEngineSelect_None, false,
-				[]*x509.Certificate{certchain[len(certchain)-1]},
-				nil, "", "",
-				true,
-				"",
-			)
+			got := Verify(data, tt.args.verifierNonce, VerifyOptions{
+				MetadataCas: []*x509.Certificate{certchain[len(certchain)-1]},
+				CheckOmsp:   true,
+			})
 			log.Info("Finished FUT")
 			if got.Summary.Status != tt.want {
 				log.Warnf("Printing Summary")

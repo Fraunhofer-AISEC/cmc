@@ -51,8 +51,13 @@ func (s *Server) verifyAttestationReport(csr *x509.CertificateRequest, report []
 		hex.EncodeToString(nonce[:]))
 
 	// Verify the attestation report
-	result := verifier.VerifyBootstrap(report, nonce[:],
-		s.policies, s.policyEngine, s.policyOverwrite, s.rootCas)
+	result := verifier.Verify(report, nonce[:], verifier.VerifyOptions{
+		Policies:        s.policies,
+		PolicyEngine:    s.policyEngine,
+		PolicyOverwrite: s.policyOverwrite,
+		MetadataCas:     s.rootCas,
+		SkipPeerAuth:    true,
+	})
 
 	hostname, _ := internal.Fqdn()
 	result.Verifier = ar.Endpoint{Hostname: hostname}

@@ -98,9 +98,17 @@ func (a LibApi) verifyAR(
 	}
 
 	log.Debug("Verifier: verifying attestation report")
-	result := verifier.Verify(req.Report, req.Nonce, req.Policies, cmcInst.PolicyEngineSelect,
-		cmcInst.PolicyOverwrite, cmcInst.RootCas, cmcInst.PeerCache, req.Peer, req.PeerAddr, cmcInst.Metadata.Omsp.Enabled,
-		cmcInst.LocalRole)
+	result := verifier.Verify(req.Report, req.Nonce, verifier.VerifyOptions{
+		Policies:        req.Policies,
+		PolicyEngine:    cmcInst.PolicyEngineSelect,
+		PolicyOverwrite: cmcInst.PolicyOverwrite,
+		MetadataCas:     cmcInst.RootCas,
+		PeerCache:       cmcInst.PeerCache,
+		Peer:            req.Peer,
+		PeerAddr:        req.PeerAddr,
+		CheckOmsp:       cmcInst.Metadata.Omsp.Enabled,
+		LocalRole:       cmcInst.LocalRole,
+	})
 
 	// Return attestation result via callback if specified
 	if cc.ResultCb != nil {

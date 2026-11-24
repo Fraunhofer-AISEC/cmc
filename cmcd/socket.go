@@ -174,10 +174,17 @@ func verify(conn net.Conn, payload []byte, cmc *c.Cmc, s ar.Serializer) {
 	log.Debugf("verifying attestation report from peer %q", req.Peer)
 
 	// Verify attestation report
-	result := verifier.Verify(req.Report, req.Nonce,
-		req.Policies, cmc.PolicyEngineSelect, cmc.PolicyOverwrite,
-		cmc.RootCas, cmc.PeerCache, req.Peer, req.PeerAddr, cmc.Metadata.Omsp.Enabled,
-		cmc.LocalRole)
+	result := verifier.Verify(req.Report, req.Nonce, verifier.VerifyOptions{
+		Policies:        req.Policies,
+		PolicyEngine:    cmc.PolicyEngineSelect,
+		PolicyOverwrite: cmc.PolicyOverwrite,
+		MetadataCas:     cmc.RootCas,
+		PeerCache:       cmc.PeerCache,
+		Peer:            req.Peer,
+		PeerAddr:        req.PeerAddr,
+		CheckOmsp:       cmc.Metadata.Omsp.Enabled,
+		LocalRole:       cmc.LocalRole,
+	})
 
 	resp := &api.VerificationResponse{
 		Version: api.GetVersion(),

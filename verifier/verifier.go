@@ -80,49 +80,40 @@ func ParsePolicyEngine(name string) (PolicyEngineSelect, error) {
 	return sel, nil
 }
 
+// VerifyOptions configures the verification of an attestation report
+type VerifyOptions struct {
+	// Policies are optional custom policies validated by PolicyEngine
+	Policies        []byte
+	PolicyEngine    PolicyEngineSelect
+	PolicyOverwrite bool
+	// MetadataCas are the trusted CAs for the metadata signatures
+	MetadataCas []*x509.Certificate
+	// PeerCache optionally caches the metadata of Peer
+	PeerCache *peercache.Cache
+	Peer      string
+	PeerAddr  string
+	CheckOmsp bool
+	// LocalRole is the role of the verifier used for peer authorization
+	LocalRole string
+	// SkipPeerAuth disables the peer authorization, e.g. for bootstrap attestation during
+	// certificate enrollment
+	SkipPeerAuth bool
+}
+
 // Verify verifies an attestation report in full serialized JWS or COSE
 // format against the supplied nonce. This includes verifying the integrity of the overall
 // report, which is bound to the hardware nonce, verifying the certificate
 // chains of all attestation report elements as well as verifying the measurements against
-// the reference values and the compatibility of software artefacts. It also enforces the peer
-// authorization from the signed metadata based on the provided local role
-func Verify(
-	arRaw, nonce []byte,
-	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
-	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
-	peer string, peerAddr string, checkOmsp bool,
-	localRole string,
-) *ar.AttestationResult {
+// the reference values and the compatibility of software artefacts. Unless disabled, it also
+// enforces the peer authorization from the signed metadata based on the provided local role
+func Verify(arRaw, nonce []byte, opts VerifyOptions) *ar.AttestationResult {
 	log.Debugf("Verifying attestation report")
-	return verify(arRaw, nonce, policies, policyEngine, policyOverwrite,
-		metadataCas, peerCache, peer, peerAddr, checkOmsp, localRole, false)
-}
-
-// VerifyBootstrap performs a reduced set of verification without peer authorization, peer cache,
-// and peer address, which is used for bootstrap attestation during certificate enrollment
-func VerifyBootstrap(
-	arRaw, nonce []byte,
-	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
-	metadataCas []*x509.Certificate,
-) *ar.AttestationResult {
-	log.Debugf("Verifying bootstrap attestation report")
-	return verify(arRaw, nonce, policies, policyEngine, policyOverwrite,
-		metadataCas, nil, "", "", false, "", true)
-}
-
-func verify(
-	arRaw, nonce []byte,
-	policies []byte, policyEngine PolicyEngineSelect, policyOverwrite bool,
-	metadataCas []*x509.Certificate, peerCache *peercache.Cache,
-	peer string, peerAddr string, checkOmsp bool,
-	localRole string, skipPeerAuth bool,
-) *ar.AttestationResult {
 
 	result := &ar.AttestationResult{
 		Version: ar.GetResultVersion(),
 		Type:    ar.TYPE_ATTESTATION_RESULT,
 		Prover: ar.Endpoint{
-			PeerId: peer,
+			PeerId: opts.Peer,
 		},
 		Summary: ar.Result{
 			Status: ar.StatusSuccess,
@@ -159,8 +150,8 @@ func verify(
 
 	// Retrieve cached metadata items for peer if configured
 	var cachedMetadata map[string][]byte
-	if peerCache != nil {
-		cachedMetadata = peerCache.Get(peer)
+	if opts.PeerCache != nil {
+		cachedMetadata = opts.PeerCache.Get(opts.Peer)
 	}
 
 	// Iterate over report metadata digests and retrieve metadata items from report and peer cache
@@ -171,8 +162,8 @@ func verify(
 
 	// A failed update of the peer cache only means that we need to send more
 	// data during the next attestation
-	if peerCache != nil {
-		err = peerCache.Update(peer, collectedMetadata)
+	if opts.PeerCache != nil {
+		err = opts.PeerCache.Update(opts.Peer, collectedMetadata)
 		if err != nil {
 			log.Warnf("Failed to update peer cache: %v", err)
 		}
@@ -180,7 +171,7 @@ func verify(
 
 	// Verify and unpack metadata from attestation report
 	log.Debugf("Verifying metadata from prover %v", result.Prover.Hostname)
-	metaResults, status := ar.ParseAndVerifyMetadata(metadataCas, collectedMetadata, checkOmsp)
+	metaResults, status := ar.ParseAndVerifyMetadata(opts.MetadataCas, collectedMetadata, opts.CheckOmsp)
 	switch status {
 	case ar.StatusSuccess:
 		log.Debug("Successfully verified metadata")
@@ -197,8 +188,8 @@ func verify(
 	} else {
 		result.Prover.Hostname = "unknown"
 	}
-	if peerAddr != "" {
-		result.Prover.Ip = peerAddr
+	if opts.PeerAddr != "" {
+		result.Prover.Ip = opts.PeerAddr
 	}
 
 	// Verify the supplied nonce and construct the evidence nonce for context integrity verification
@@ -259,7 +250,7 @@ Loop:
 		switch evtype := ev.Type; evtype {
 
 		case ar.TYPE_EVIDENCE_TPM:
-			tpmCas, requireAkEku := tpmAkTrust(report.Evidences, col, metadataCas)
+			tpmCas, requireAkEku := tpmAkTrust(report.Evidences, col, opts.MetadataCas)
 			addMeasurements(result, "TPM", *VerifyTpm(ev, col, evidenceNonce, tpmCas, requireAkEku,
 				refVals[ar.TRUST_ANCHOR_TPM], s))
 
@@ -317,8 +308,8 @@ Loop:
 
 	// Check if we are allowed to establish a connection with this peer in case peer policies are
 	// provided
-	if !skipPeerAuth {
-		result.PeerAuth = verifyPeerAuthorization(localRole, &result.Metadata)
+	if !opts.SkipPeerAuth {
+		result.PeerAuth = verifyPeerAuthorization(opts.LocalRole, &result.Metadata)
 		result.Summary.Status = result.Summary.Status.Worse(result.PeerAuth.Status)
 	}
 
@@ -326,12 +317,12 @@ Loop:
 	result.Created = time.Now().Format(time.RFC3339Nano)
 
 	// Validate policies if specified
-	if policies != nil {
-		p, ok := policyEngines[policyEngine]
+	if opts.Policies != nil {
+		p, ok := policyEngines[opts.PolicyEngine]
 		if !ok {
 			result.Fail(ar.PolicyEngineNotImplemented)
 		} else {
-			ok = p.Validate(result, policies, policyOverwrite)
+			ok = p.Validate(result, opts.Policies, opts.PolicyOverwrite)
 			if !ok {
 				result.Fail(ar.VerifyPolicies)
 			}
