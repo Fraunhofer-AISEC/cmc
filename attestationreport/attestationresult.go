@@ -541,101 +541,102 @@ func ExtractX509Infos(cert *x509.Certificate) X509CertExtracted {
 type ErrorCode int
 
 const (
-	NotSpecified ErrorCode = iota
-	CaFingerprint
-	CRLCheckRoot
-	CRLCheckPCK
-	CRLCheckSigningCert
-	DecodeCertChain
-	UnknownSerialization
-	DownloadRootCRL
-	DownloadPCKCRL
-	EvidenceLength
-	EvidenceMissing
-	EvidenceType
-	Expired
-	ExtractPubKey
-	Internal
-	JWSNoSignatures
-	JWSSignatureOrder
-	JWSPayload
-	JWSNoKeyOrCert
-	JWSUnknownVerifierType
-	COSENoSignatures
-	COSEUnknownVerifierType
-	MeasurementNoMatch
-	MeasurementTypeNotSupported
-	NotPresent
-	NotYetValid
-	OidLength
-	OidNotPresent
-	OidTag
-	Parse
-	ParseAR
-	ParseX5C
-	ParseCA
-	ParseCAFingerprint
-	ParseCert
-	ParseTcbInfo
-	ParseJSON
-	ParseCBOR
-	ParseMetadata
-	ParseEvidence
-	ParseExtensions
-	ParseQEIdentity
-	ParseTime
-	PolicyEngineNotImplemented
-	RefValTypeNotSupported
-	SetupSystemCA
-	SgxFmpcMismatch
-	SgxPceidMismatch
-	SignatureLength
-	PolicyNotPresent
-	RefValMultiple
-	RefValAltUnsupported
-	RefValAltGroup
-	RefValNotPresent
-	RefValType
-	RefValNoMatch
-	TcbInfoExpired
-	TcbLevelUnsupported
-	TcbLevelRevoked
-	UnsupportedAlgorithm
-	VerifyAR
-	VerifyCertChain
-	VerifyPCKChain
-	VerifyMetadata
-	VerifyPolicies
-	VerifyQEIdentityErr
-	VerifySignature
-	VerifyTCBChain
-	VerifyTcbInfo
-	VerifyMeasurement
-	ExtensionsCheck
-	PcrNotSpecified
-	ImageDescriptionNotPresent
-	UnknownMetadata
-	InvalidVersion
-	NoRootManifest
-	MultipleRootManifests
-	VerifyEvidence
-	VerifyAggregatedSwHash
-	CollateralNotPresent
-	ParseCollateral
-	IllegalTdxMrIndex
-	ParseKey
-	ExtractPayload
-	TdxVerification
-	Freshness
-	UnsupportedContextHashAlg
-	CalculateContextHash
-	ManifestRevoked
-	ManifestRevocationUnknown
-	ManifestOutdated
-	PeerNotAuthorized
-	LocalRoleUnknown
-	PcrSelectionNoMatch
-	AkExtKeyUsageMissing
+	// Values are part of the wire format. Only append new codes.
+	NotSpecified                ErrorCode = 0
+	CaFingerprint               ErrorCode = 1
+	CRLCheckRoot                ErrorCode = 2
+	CRLCheckPCK                 ErrorCode = 3
+	CRLCheckSigningCert         ErrorCode = 4
+	DecodeCertChain             ErrorCode = 5
+	UnknownSerialization        ErrorCode = 6
+	DownloadRootCRL             ErrorCode = 7
+	DownloadPCKCRL              ErrorCode = 8
+	EvidenceLength              ErrorCode = 9
+	EvidenceMissing             ErrorCode = 10
+	EvidenceType                ErrorCode = 11
+	Expired                     ErrorCode = 12
+	ExtractPubKey               ErrorCode = 13
+	Internal                    ErrorCode = 14
+	JWSNoSignatures             ErrorCode = 15
+	JWSSignatureOrder           ErrorCode = 16
+	JWSPayload                  ErrorCode = 17
+	JWSNoKeyOrCert              ErrorCode = 18
+	JWSUnknownVerifierType      ErrorCode = 19
+	COSENoSignatures            ErrorCode = 20
+	COSEUnknownVerifierType     ErrorCode = 21
+	MeasurementNoMatch          ErrorCode = 22
+	MeasurementTypeNotSupported ErrorCode = 23
+	NotPresent                  ErrorCode = 24
+	NotYetValid                 ErrorCode = 25
+	OidLength                   ErrorCode = 26
+	OidNotPresent               ErrorCode = 27
+	OidTag                      ErrorCode = 28
+	Parse                       ErrorCode = 29
+	ParseAR                     ErrorCode = 30
+	ParseX5C                    ErrorCode = 31
+	ParseCA                     ErrorCode = 32
+	ParseCAFingerprint          ErrorCode = 33
+	ParseCert                   ErrorCode = 34
+	ParseTcbInfo                ErrorCode = 35
+	ParseJSON                   ErrorCode = 36
+	ParseCBOR                   ErrorCode = 37
+	ParseMetadata               ErrorCode = 38
+	ParseEvidence               ErrorCode = 39
+	ParseExtensions             ErrorCode = 40
+	ParseQEIdentity             ErrorCode = 41
+	ParseTime                   ErrorCode = 42
+	PolicyEngineNotImplemented  ErrorCode = 43
+	RefValTypeNotSupported      ErrorCode = 44
+	SetupSystemCA               ErrorCode = 45
+	SgxFmpcMismatch             ErrorCode = 46
+	SgxPceidMismatch            ErrorCode = 47
+	SignatureLength             ErrorCode = 48
+	PolicyNotPresent            ErrorCode = 49
+	RefValMultiple              ErrorCode = 50
+	RefValAltUnsupported        ErrorCode = 51
+	RefValAltGroup              ErrorCode = 52
+	RefValNotPresent            ErrorCode = 53
+	RefValType                  ErrorCode = 54
+	RefValNoMatch               ErrorCode = 55
+	TcbInfoExpired              ErrorCode = 56
+	TcbLevelUnsupported         ErrorCode = 57
+	TcbLevelRevoked             ErrorCode = 58
+	UnsupportedAlgorithm        ErrorCode = 59
+	VerifyAR                    ErrorCode = 60
+	VerifyCertChain             ErrorCode = 61
+	VerifyPCKChain              ErrorCode = 62
+	VerifyMetadata              ErrorCode = 63
+	VerifyPolicies              ErrorCode = 64
+	VerifyQEIdentityErr         ErrorCode = 65
+	VerifySignature             ErrorCode = 66
+	VerifyTCBChain              ErrorCode = 67
+	VerifyTcbInfo               ErrorCode = 68
+	VerifyMeasurement           ErrorCode = 69
+	ExtensionsCheck             ErrorCode = 70
+	PcrNotSpecified             ErrorCode = 71
+	ImageDescriptionNotPresent  ErrorCode = 72
+	UnknownMetadata             ErrorCode = 73
+	InvalidVersion              ErrorCode = 74
+	NoRootManifest              ErrorCode = 75
+	MultipleRootManifests       ErrorCode = 76
+	VerifyEvidence              ErrorCode = 77
+	VerifyAggregatedSwHash      ErrorCode = 78
+	CollateralNotPresent        ErrorCode = 79
+	ParseCollateral             ErrorCode = 80
+	IllegalTdxMrIndex           ErrorCode = 81
+	ParseKey                    ErrorCode = 82
+	ExtractPayload              ErrorCode = 83
+	TdxVerification             ErrorCode = 84
+	Freshness                   ErrorCode = 85
+	UnsupportedContextHashAlg   ErrorCode = 86
+	CalculateContextHash        ErrorCode = 87
+	ManifestRevoked             ErrorCode = 88
+	ManifestRevocationUnknown   ErrorCode = 89
+	ManifestOutdated            ErrorCode = 90
+	PeerNotAuthorized           ErrorCode = 91
+	LocalRoleUnknown            ErrorCode = 92
+	PcrSelectionNoMatch         ErrorCode = 93
+	AkExtKeyUsageMissing        ErrorCode = 94
 )
 
 func (e ErrorCode) String() string {
