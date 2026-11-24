@@ -25,6 +25,19 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
+// MetadataSet holds the parsed metadata of an image, manifests ordered root first
+type MetadataSet struct {
+	ImageDescription   Metadata
+	Manifests          []Metadata
+	CompanyDescription *Metadata
+}
+
+// metadataEntry pairs a parsed metadata item with its verification result
+type metadataEntry struct {
+	meta   Metadata
+	result MetadataResult
+}
+
 // ParseAndVerifyMetadata takes the metadata map with keys being the digests of the raw metadata
 // items and a set of CAs and performs a validity, signature and certificate chain validation, as
 // well as compatibility checks: The image description must reference all manifests, and starting
@@ -32,82 +45,105 @@ import (
 // It optionally also checks that none of the manifests have been revoked based on the OMSP response.
 // Multiple image descriptions, company descriptions or OMSP responses for the same server are
 // rejected and recorded in the unknown results.
-func ParseAndVerifyMetadata(cas []*x509.Certificate, metadatamap map[string][]byte,
-	checkOmsp bool,
-) (MetadataSummary, Status) {
+//
+// The returned error is non-nil if and only if the summary status is fail. The set is always
+// returned for diagnosis, but its content must not be trusted if the error is non-nil.
+func ParseAndVerifyMetadata(cas []*x509.Certificate, items map[string][]byte, checkOmsp bool,
+) (*MetadataSet, MetadataSummary, error) {
 
-	results := MetadataSummary{}
-	success := StatusSuccess
+	set := &MetadataSet{}
+	summary := MetadataSummary{}
+	status := StatusSuccess
 
-	var imageDescriptions, companyDescriptions []MetadataResult
-	omspResponses := make(map[string][]MetadataResult)
+	var imageDescriptions, companyDescriptions, manifests []metadataEntry
+	omspResponses := make(map[string][]metadataEntry)
 
-	for _, digest := range slices.Sorted(maps.Keys(metadatamap)) {
+	for _, digest := range slices.Sorted(maps.Keys(items)) {
 
-		result := ParseAndVerifyMetadataItem(digest, metadatamap[digest], cas)
+		meta, result := ParseAndVerifyMetadataItem(digest, items[digest], cas)
 		if result.Summary.Status != StatusSuccess {
-			success = StatusFail
-		}
-
-		switch result.Metadata.Type {
-		case TYPE_IMAGE_DESCRIPTION:
-			imageDescriptions = append(imageDescriptions, result)
-		case TYPE_COMPANY_DESCRIPTION:
-			companyDescriptions = append(companyDescriptions, result)
-		case TYPE_MANIFEST:
-			results.ManifestResults = append(results.ManifestResults, result)
-		case TYPE_OMSP_RESPONSE:
-			omspResponses[result.Server] = append(omspResponses[result.Server], result)
-		default:
-			results.UnknownResults = append(results.UnknownResults, result)
-			log.Warnf("Unknown manifest type %v", result.Metadata.Type)
-			success = StatusFail
+			status = StatusFail
 		}
 		log.Tracef("Finished validation of metadata item %v: %v", digest, result.Summary.Status)
+
+		if meta == nil {
+			summary.UnknownResults = append(summary.UnknownResults, result)
+			status = StatusFail
+			continue
+		}
+		e := metadataEntry{meta: *meta, result: result}
+
+		switch meta.Type {
+		case TYPE_IMAGE_DESCRIPTION:
+			imageDescriptions = append(imageDescriptions, e)
+		case TYPE_COMPANY_DESCRIPTION:
+			companyDescriptions = append(companyDescriptions, e)
+		case TYPE_MANIFEST:
+			manifests = append(manifests, e)
+		case TYPE_OMSP_RESPONSE:
+			omspResponses[meta.Server] = append(omspResponses[meta.Server], e)
+		default:
+			summary.UnknownResults = append(summary.UnknownResults, result)
+			log.Warnf("Unknown manifest type %v", meta.Type)
+			status = StatusFail
+		}
 	}
 
-	if unique, ok := results.selectUnique(imageDescriptions, MultipleImageDescriptions); ok {
+	if unique, ok := summary.selectUnique(imageDescriptions, MultipleImageDescriptions); ok {
 		if unique != nil {
-			results.ImageDescriptionResult = *unique
+			set.ImageDescription = unique.meta
+			summary.ImageDescriptionResult = unique.result
 		}
 	} else {
-		success = StatusFail
+		status = StatusFail
 	}
 
-	if unique, ok := results.selectUnique(companyDescriptions, MultipleCompanyDescriptions); ok {
-		results.CompanyDescriptionResult = unique
+	if unique, ok := summary.selectUnique(companyDescriptions, MultipleCompanyDescriptions); ok {
+		if unique != nil {
+			set.CompanyDescription = &unique.meta
+			summary.CompanyDescriptionResult = &unique.result
+		}
 	} else {
-		success = StatusFail
+		status = StatusFail
 	}
 
 	omspMap := make(map[string]Metadata)
 	for _, server := range slices.Sorted(maps.Keys(omspResponses)) {
-		unique, ok := results.selectUnique(omspResponses[server], MultipleOmspResponses)
+		unique, ok := summary.selectUnique(omspResponses[server], MultipleOmspResponses)
 		if !ok {
-			success = StatusFail
+			status = StatusFail
 			continue
 		}
-		omspMap[server] = unique.Metadata
-		results.OmspResults = append(results.OmspResults, *unique)
+		omspMap[server] = unique.meta
+		summary.OmspResults = append(summary.OmspResults, unique.result)
 	}
 
 	if checkOmsp {
-		success = success.Worse(checkManifestRevocation(results.ManifestResults, omspMap))
+		status = status.Worse(checkManifestRevocation(manifests, omspMap))
 	}
 
-	r := CheckMetadataCompatibility(&results)
-	if r.Summary.Status != StatusSuccess {
-		success = StatusFail
+	compatibility, manifests := checkMetadataCompatibility(set.ImageDescription, manifests)
+	if compatibility.Summary.Status != StatusSuccess {
+		status = StatusFail
 	}
-	results.CompatibilityResult = *r
+	summary.CompatibilityResult = compatibility
 
-	return results, success
+	for _, m := range manifests {
+		set.Manifests = append(set.Manifests, m.meta)
+		summary.ManifestResults = append(summary.ManifestResults, m.result)
+	}
+
+	summary.Summary.Status = status
+	if status == StatusFail {
+		return set, summary, fmt.Errorf("metadata verification failed")
+	}
+	return set, summary, nil
 }
 
 // selectUnique returns the only item of candidates, or nil if there is none. If there are multiple
 // items, all of them fail with the given error code and are moved to the unknown results.
-func (s *MetadataSummary) selectUnique(candidates []MetadataResult, code ErrorCode,
-) (*MetadataResult, bool) {
+func (s *MetadataSummary) selectUnique(candidates []metadataEntry, code ErrorCode,
+) (*metadataEntry, bool) {
 	switch len(candidates) {
 	case 0:
 		return nil, true
@@ -115,39 +151,48 @@ func (s *MetadataSummary) selectUnique(candidates []MetadataResult, code ErrorCo
 		return &candidates[0], true
 	}
 	for _, c := range candidates {
-		log.Warnf("Found multiple %v items: %v (digest %v)", c.Type, c.Name, c.Digest)
-		c.Summary.Fail(code)
-		s.UnknownResults = append(s.UnknownResults, c)
+		log.Warnf("Found multiple %v items: %v (digest %v)", c.meta.Type, c.meta.Name,
+			c.result.Digest)
+		c.result.Summary.Fail(code)
+		s.UnknownResults = append(s.UnknownResults, c.result)
 	}
 	return nil, false
 }
 
+// newMetadataResult creates a result holding the display fields of the metadata item
+func newMetadataResult(m *Metadata) MetadataResult {
+	return MetadataResult{
+		MetaInfo:   m.MetaInfo,
+		BaseLayers: m.BaseLayers,
+		Details:    m.Details,
+		Location:   m.Location,
+	}
+}
+
 // ParseAndVerifyMetadataItem detects the serialization of a single raw metadata item, verifies its
 // signature against the CAs, unpacks it and checks its validity period. Failures are recorded in
-// the returned result, which also records the digest of the item.
-func ParseAndVerifyMetadataItem(digest string, meta []byte, cas []*x509.Certificate) MetadataResult {
+// the returned result, which also records the digest of the item. The returned metadata is nil if
+// the item could not be parsed. If the result status is not success, the metadata is unverified
+// and only returned for diagnosis.
+func ParseAndVerifyMetadataItem(digest string, raw []byte, cas []*x509.Certificate,
+) (*Metadata, MetadataResult) {
 	log.Tracef("Validating metadata item %v...", digest)
 
-	s, err := DetectSerialization(meta)
+	s, err := DetectSerialization(raw)
 	if err != nil {
 		result := MetadataResult{Digest: digest}
 		result.Summary.Fail(ExtractPayload, err)
-		return result
+		return nil, result
 	}
 	log.Tracef("Detected %v serialization", s.String())
 
-	payload, sigs, sigResult := s.Verify(meta, cas)
-	result := MetadataResult{
-		Digest:         digest,
-		Summary:        sigResult,
-		SignatureCheck: sigs,
-	}
+	payload, sigs, sigResult := s.Verify(raw, cas)
 	if sigResult.Status != StatusSuccess {
 		log.Warnf("Signature verification of metadata item %v failed", digest)
 		// Still unpack metadata item for validation-result diagnosis
-		payload, err = s.GetPayload(meta)
+		payload, err = s.GetPayload(raw)
 		if err != nil {
-			result.Summary.Fail(ExtractPayload, err)
+			sigResult.Fail(ExtractPayload, err)
 		} else {
 			log.Trace("Extracted unverified JWS payload")
 		}
@@ -155,17 +200,27 @@ func ParseAndVerifyMetadataItem(digest string, meta []byte, cas []*x509.Certific
 		log.Tracef("Signature verification of metadata item %v successful", digest)
 	}
 
-	err = s.Unmarshal(payload, &result.Metadata)
-	if err != nil {
+	meta := new(Metadata)
+	if err = s.Unmarshal(payload, meta); err != nil {
+		result := MetadataResult{
+			Digest:         digest,
+			Summary:        sigResult,
+			SignatureCheck: sigs,
+		}
 		result.Summary.Fail(ParseMetadata, err)
-	} else {
-		log.Tracef("Parse metadata %v: %v successful", result.Metadata.Type, result.Metadata.Name)
+		return nil, result
 	}
+	log.Tracef("Parse metadata %v: %v successful", meta.Type, meta.Name)
 
-	if result.Metadata.Type == TYPE_OMSP_RESPONSE {
+	result := newMetadataResult(meta)
+	result.Digest = digest
+	result.Summary = sigResult
+	result.SignatureCheck = sigs
+
+	if meta.Type == TYPE_OMSP_RESPONSE {
 		log.Tracef("Checking validity of OMSP response...")
 		currentTime := time.Now()
-		notBefore, err := time.Parse(time.RFC3339, result.ProducedAt)
+		notBefore, err := time.Parse(time.RFC3339, meta.ProducedAt)
 		if err != nil {
 			result.Summary.Status = StatusFail
 			result.ValidityCheck.Fail(ParseTime, err)
@@ -181,58 +236,55 @@ func ParseAndVerifyMetadataItem(digest string, meta []byte, cas []*x509.Certific
 		}
 	} else {
 		log.Trace("Checking validity of metadata item...")
-		if result.Metadata.Validity == nil {
-			log.Warnf("Manifest %v: %v is missing validity information",
-				result.Metadata.Type, result.Metadata.Name)
+		if meta.Validity == nil {
+			log.Warnf("Manifest %v: %v is missing validity information", meta.Type, meta.Name)
 			result.Summary.Status = StatusFail
 		} else {
-			result.ValidityCheck = checkValidity(result.Metadata.Validity)
+			result.ValidityCheck = checkValidity(meta.Validity)
 			if result.ValidityCheck.Status == StatusFail {
 				log.Warnf("Checking expiration of %v: %v failed (NotBefore: %v, NotAfter: %v)",
-					result.Metadata.Type, result.Metadata.Name,
-					result.Metadata.Validity.NotBefore, result.Metadata.Validity.NotAfter)
+					meta.Type, meta.Name, meta.Validity.NotBefore, meta.Validity.NotAfter)
 				result.Summary.Status = StatusFail
 			} else {
-				log.Tracef("Checking expiration of %v: %v successful",
-					result.Metadata.Type, result.Metadata.Name)
+				log.Tracef("Checking expiration of %v: %v successful", meta.Type, meta.Name)
 			}
 		}
 	}
-	return result
+	return meta, result
 }
 
-// CheckMetadataCompatibility checks that the image description and the manifests reference each
+// checkMetadataCompatibility checks that the image description and the manifests reference each
 // other and that all manifests have a compatible base layer starting from the root manifest. It
-// reorders metadata.ManifestResults with the root manifest first, followed by its dependents.
-func CheckMetadataCompatibility(metadata *MetadataSummary) *CompatibilityResult {
+// returns the manifests reordered with the root manifest first, followed by its dependents.
+func checkMetadataCompatibility(imageDescription Metadata, manifests []metadataEntry,
+) (CompatibilityResult, []metadataEntry) {
 
-	result := &CompatibilityResult{
+	result := CompatibilityResult{
 		Summary: Result{
 			Status: StatusSuccess,
 		},
 	}
 
-	// Check metadata compatibility and update image description result
-	if metadata.ImageDescriptionResult.Name == "" {
+	if imageDescription.Name == "" {
 		result.Summary.Fail(ImageDescriptionNotPresent)
 	}
 
 	// Gather all manifest names referenced in the manifest descriptions
-	descManifests := make([]string, 0, len(metadata.ImageDescriptionResult.Descriptions))
-	for _, m := range metadata.ImageDescriptionResult.Descriptions {
+	descManifests := make([]string, 0, len(imageDescription.Descriptions))
+	for _, m := range imageDescription.Descriptions {
 		descManifests = append(descManifests, m.Manifest)
 	}
 
 	// Gather all manifest names from the manifests
-	manifestNames := make([]string, 0, len(metadata.ManifestResults))
-	for _, m := range metadata.ManifestResults {
-		manifestNames = append(manifestNames, m.Name)
+	manifestNames := make([]string, 0, len(manifests))
+	for _, m := range manifests {
+		manifestNames = append(manifestNames, m.meta.Name)
 	}
 
 	// Check that each manifest description has a corresponding manifest
-	log.Tracef("Iterating manifest descriptions length %v", len(metadata.ImageDescriptionResult.Descriptions))
-	descriptionMatch := make([]Result, 0, len(metadata.ImageDescriptionResult.Descriptions))
-	for _, desc := range metadata.ImageDescriptionResult.Descriptions {
+	log.Tracef("Iterating manifest descriptions length %v", len(imageDescription.Descriptions))
+	descriptionMatch := make([]Result, 0, len(imageDescription.Descriptions))
+	for _, desc := range imageDescription.Descriptions {
 
 		ok := internal.Contains(desc.Manifest, manifestNames)
 		if !ok {
@@ -240,51 +292,45 @@ func CheckMetadataCompatibility(metadata *MetadataSummary) *CompatibilityResult 
 			result.Summary.Status = StatusFail
 		}
 
-		r := Result{
+		descriptionMatch = append(descriptionMatch, Result{
 			Status:        StatusFromBool(ok),
 			Got:           desc.Manifest,
 			ExpectedOneOf: manifestNames,
-		}
-		descriptionMatch = append(descriptionMatch, r)
-
+		})
 	}
 
 	// Check that each manifest has a corresponding manifest description
-	log.Tracef("Iterating manifests length %v", len(metadata.ManifestResults))
-	manifestMatch := make([]Result, 0, len(metadata.ManifestResults))
-	for _, m := range metadata.ManifestResults {
-
-		ok := internal.Contains(m.Name, descManifests)
-		if !ok {
-			log.Warnf("No manifest description for manifest: %v", m.Name)
+	log.Tracef("Iterating manifests length %v", len(manifests))
+	manifestMatch := make([]Result, 0, len(manifests))
+	for _, m := range manifests {
+		// Found manifests have already been recorded, only record missing ones
+		if !internal.Contains(m.meta.Name, descManifests) {
+			log.Warnf("No manifest description for manifest: %v", m.meta.Name)
 			result.Summary.Status = StatusFail
-			r := Result{
+			manifestMatch = append(manifestMatch, Result{
 				Status:        StatusFail,
-				Got:           m.Name,
+				Got:           m.meta.Name,
 				ExpectedOneOf: descManifests,
-			}
-			manifestMatch = append(manifestMatch, r)
+			})
 		}
-		// Found manifests have already been recorded, nothing to do
 	}
 
 	// Check that each manifest has a compatible base layer
-	manifestResults, manifestCompatibility, errCode, ok := processManifests(metadata.ManifestResults)
+	sorted, manifestCompatibility, errCode, ok := processManifests(manifests)
 	if !ok {
 		result.Summary.Fail(errCode)
 	}
-	metadata.ManifestResults = manifestResults
 
 	result.DescriptionMatch = descriptionMatch
 	result.ManifestMatch = manifestMatch
 	result.ManifestCompatibility = manifestCompatibility
 
-	return result
+	return result, sorted
 }
 
 // CollectComponents gathers the reference value components of all manifests grouped by trust
 // anchor and attaches the OCI rules of the corresponding manifest descriptions.
-func CollectComponents(metadata []MetadataResult, descriptions []ManifestDescription,
+func CollectComponents(manifests []Metadata, descriptions []ManifestDescription,
 ) (map[string][]Component, error) {
 
 	// SwVerify only: Build manifest-name: OciRules lookup from descriptions for
@@ -298,8 +344,8 @@ func CollectComponents(metadata []MetadataResult, descriptions []ManifestDescrip
 
 	refmap := make(map[string][]Component)
 	// Iterate over all manifest reference values
-	log.Tracef("Collecting reference values from %v manifests", len(metadata))
-	for _, m := range metadata {
+	log.Tracef("Collecting reference values from %v manifests", len(manifests))
+	for _, m := range manifests {
 		if m.Sbom == nil {
 			log.Tracef("Manifest does not contain sbom. Continue")
 			continue
@@ -362,98 +408,92 @@ func CollectMetadata(context Context, cached map[string][]byte) (map[string][]by
 
 // IsRootManifest reports whether the manifest is a root of trust manifest, i.e., its only
 // base layer is itself
-func IsRootManifest(m MetadataResult) bool {
+func IsRootManifest(m Metadata) bool {
 	return len(m.BaseLayers) == 1 && m.Name == m.BaseLayers[0]
 }
 
-// RootManifest returns the first root of trust manifest or an empty result if there is none.
+// RootManifest returns the first root of trust manifest or an empty manifest if there is none.
 // Multiple root manifests are rejected during metadata verification.
-func RootManifest(manifests []MetadataResult) MetadataResult {
+func RootManifest(manifests []Metadata) Metadata {
 	for _, m := range manifests {
 		if IsRootManifest(m) {
 			return m
 		}
 	}
-	return MetadataResult{}
+	return Metadata{}
 }
 
-func processManifests(manifests []MetadataResult) ([]MetadataResult, []Result, ErrorCode, bool) {
+// processManifests sorts the manifests starting with the root manifest, followed by the manifests
+// with a compatible base layer. Manifests without compatible base layer are appended at the end.
+func processManifests(manifests []metadataEntry) ([]metadataEntry, []Result, ErrorCode, bool) {
 
-	mm := make(map[string][]MetadataResult)
-	var root MetadataResult
+	mm := make(map[string][]metadataEntry)
+	var root *metadataEntry
 	results := make([]Result, 0)
 	success := true
 
 	// Organize manifests by BaseLayer
-	foundRoot := false
-	for _, m := range manifests {
-		if IsRootManifest(m) {
+	for i := range manifests {
+		m := &manifests[i]
+		if IsRootManifest(m.meta) {
 			// Check that there is exactly one root of trust manifest
-			if foundRoot {
-				log.Warnf("Found additional root of trust manifest %v (already got %v)", m.Name, root.Name)
-				success = false
-				return manifests, nil, MultipleRootManifests, success
+			if root != nil {
+				log.Warnf("Found additional root of trust manifest %v (already got %v)",
+					m.meta.Name, root.meta.Name)
+				return manifests, nil, MultipleRootManifests, false
 			}
 			root = m
-			foundRoot = true
 		} else {
-			for _, base := range m.BaseLayers {
-				mm[base] = append(mm[base], m)
+			for _, base := range m.meta.BaseLayers {
+				mm[base] = append(mm[base], *m)
 			}
 		}
 	}
 
-	// Start the sorted list with the root
-	var sorted []MetadataResult
-	var unplaced []MetadataResult
-	if !foundRoot || root.Name == "" {
+	if root == nil || root.meta.Name == "" {
 		log.Warn("Did not find root manifest")
-		unplaced = manifests
-		success = false
-		return manifests, nil, NoRootManifest, success
-	} else {
-		sorted = append(sorted, root)
-		results = append(results, Result{
-			Status: StatusSuccess,
-			Got:    root.Name,
-		})
+		return manifests, nil, NoRootManifest, false
 	}
 
+	// Start the sorted list with the root
+	sorted := []metadataEntry{*root}
+	results = append(results, Result{
+		Status: StatusSuccess,
+		Got:    root.meta.Name,
+	})
+
 	// Track processed layers
-	processed := map[string]bool{root.Name: true}
+	processed := map[string]bool{root.meta.Name: true}
 
 	// Iteratively add dependent layers
 	for i := 0; i < len(sorted); i++ {
-		current := sorted[i]
-		for _, dependent := range mm[current.Name] {
-			if !processed[dependent.Name] && hasCompatibleBaseLayer(dependent.BaseLayers, processed) {
+		for _, dependent := range mm[sorted[i].meta.Name] {
+			name := dependent.meta.Name
+			if !processed[name] && hasCompatibleBaseLayer(dependent.meta.BaseLayers, processed) {
 				sorted = append(sorted, dependent)
-				processed[dependent.Name] = true
+				processed[name] = true
 				results = append(results, Result{
 					Status:        StatusSuccess,
-					Got:           dependent.Name,
-					ExpectedOneOf: dependent.BaseLayers,
+					Got:           name,
+					ExpectedOneOf: dependent.meta.BaseLayers,
 				})
 			}
 		}
 	}
 
-	// Identify manifests with no compatible base layer
+	// Add manifests with no compatible base layer to the end of the list
 	for _, m := range manifests {
-		if !processed[m.Name] {
-			log.Warnf("%v has no compatible baselayer", m.Name)
-			unplaced = append(unplaced, m)
+		if !processed[m.meta.Name] {
+			log.Warnf("%v has no compatible baselayer", m.meta.Name)
+			sorted = append(sorted, m)
 			success = false
 			results = append(results, Result{
 				Status:        StatusFail,
-				Got:           m.Name,
-				ExpectedOneOf: m.BaseLayers,
+				Got:           m.meta.Name,
+				ExpectedOneOf: m.meta.BaseLayers,
 			})
 		}
 	}
-
-	// Add unplaced manifests to the end of the list
-	sorted = append(sorted, unplaced...)
 
 	return sorted, results, NotSpecified, success
 }
@@ -499,23 +539,24 @@ func checkValidity(val *Validity) Result {
 	return result
 }
 
-func checkManifestRevocation(manifestResults []MetadataResult, omspMap map[string]Metadata) Status {
+func checkManifestRevocation(manifests []metadataEntry, omspMap map[string]Metadata) Status {
 
 	success := StatusSuccess
 
 	log.Debug("Checking revocation status of manifests...")
-	for i := range manifestResults {
-		elem := &manifestResults[i]
-		if elem.OmspServer == "" {
+	for i := range manifests {
+		elem := &manifests[i].result
+		omspServer := manifests[i].meta.OmspServer
+		if omspServer == "" {
 			log.Debugf("Manifest %v with digest %v does not contain omsp request URL. Ignore",
 				elem.Name, elem.Digest)
-			elem.Summary.Details = elem.Summary.Details +
-				("Revocation check for manifest was not possible, because manifest contains no OmspServer URL.")
+			elem.Summary.appendDetails(
+				"Revocation check for manifest was not possible, because manifest contains no OmspServer URL")
 			continue
 		}
 
 		omspFound := false
-		for _, resp := range omspMap[elem.OmspServer].Responses {
+		for _, resp := range omspMap[omspServer].Responses {
 
 			if resp.ManifestHash == elem.Digest {
 				omspFound = true

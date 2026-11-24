@@ -10,13 +10,8 @@ function checkRoles(signatureResults, expectedRoles){
     return false;
 	}
 
-	for (i = 0; i < signatureResults.length; i++) {
-		if (signatureResults[i].certs.length == 0) {
-    		console.log("[PolicyEngine] Cert chain for signed artifact is empty")
-    		return false;
-		}
-
-		if (signatureResults[i].certs.length == 0) {
+	for (var i = 0; i < signatureResults.length; i++) {
+		if (!signatureResults[i].certs || signatureResults[i].certs.length == 0) {
     		console.log("[PolicyEngine] No validated cert chain provided for signed artifact")
     		return false;
 		}
@@ -36,7 +31,7 @@ function checkRoles(signatureResults, expectedRoles){
 }
 
 //Verify the measurements were signed by a device
-for (i=0; i < obj.measurements.length; i++){
+for (var i=0; i < obj.measurements.length; i++){
 	if (!checkRoles([obj.measurements[i].signature], ["device"])) {
 		console.log("[PolicyEngine] Role check for Measurement Signature", obj.measurements[i].type, "failed")
 		success = false;
@@ -46,7 +41,7 @@ for (i=0; i < obj.measurements.length; i++){
 }
 
 //Verify roles used to sign manifests
-for (i=0; i < obj.metadata.manifestResults.length; i++){
+for (var i=0; i < obj.metadata.manifestResults.length; i++){
 	if (!checkRoles(obj.metadata.manifestResults[i].signatureValidation, ["Developer", "Evaluator", "Certifier"])) {
 		console.log("[PolicyEngine] Role check for Manifest Signature", obj.metadata.manifestResults[i].name, "failed")
 		success = false;

@@ -22,37 +22,22 @@ import (
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 )
 
-// buildMeta constructs a MetadataSummary whose image description carries the given allowed peers.
-// A nil slice models an image description without peer policy
-func buildMeta(allowed []string) *ar.MetadataSummary {
-	id := ar.ImageDescription{}
-	if allowed != nil {
-		id.AllowedPeers = allowed
-	}
-	return &ar.MetadataSummary{
-		ImageDescriptionResult: ar.MetadataResult{
-			Metadata: ar.Metadata{ImageDescription: id},
-		},
-	}
-}
-
 func TestVerifyPeerAuthorization_NoPolicy(t *testing.T) {
-	res := verifyPeerAuthorization("example:ns/a", buildMeta(nil))
+	res := verifyPeerAuthorization("example:ns/a", nil)
 	if res.Status != ar.StatusSuccess {
 		t.Fatalf("expected success, got %q", res.Status)
 	}
 }
 
 func TestVerifyPeerAuthorization_EmptyAllowedIsSuccess(t *testing.T) {
-	res := verifyPeerAuthorization("example:ns/a", buildMeta([]string{}))
+	res := verifyPeerAuthorization("example:ns/a", []string{})
 	if res.Status != ar.StatusSuccess {
 		t.Fatalf("expected success for empty Allowed, got %q", res.Status)
 	}
 }
 
 func TestVerifyPeerAuthorization_Success(t *testing.T) {
-	meta := buildMeta([]string{"example:ns/a", "example:ns/b"})
-	res := verifyPeerAuthorization("example:ns/a", meta)
+	res := verifyPeerAuthorization("example:ns/a", []string{"example:ns/a", "example:ns/b"})
 	if res.Status != ar.StatusSuccess {
 		t.Fatalf("expected success, got %q (errs=%v)", res.Status, res.ErrorCodes)
 	}
@@ -65,8 +50,7 @@ func TestVerifyPeerAuthorization_Success(t *testing.T) {
 }
 
 func TestVerifyPeerAuthorization_RoleNotInSet(t *testing.T) {
-	meta := buildMeta([]string{"example:ns/a"})
-	res := verifyPeerAuthorization("example:ns/b", meta)
+	res := verifyPeerAuthorization("example:ns/b", []string{"example:ns/a"})
 	if res.Status != ar.StatusFail {
 		t.Fatalf("expected fail, got %q", res.Status)
 	}
@@ -76,8 +60,7 @@ func TestVerifyPeerAuthorization_RoleNotInSet(t *testing.T) {
 }
 
 func TestVerifyPeerAuthorization_UnknownLocalRoleWithPolicy(t *testing.T) {
-	meta := buildMeta([]string{"example:ns/a"})
-	res := verifyPeerAuthorization("", meta)
+	res := verifyPeerAuthorization("", []string{"example:ns/a"})
 	if res.Status != ar.StatusFail {
 		t.Fatalf("expected fail for empty local role with peer policy, got %q", res.Status)
 	}
@@ -87,18 +70,8 @@ func TestVerifyPeerAuthorization_UnknownLocalRoleWithPolicy(t *testing.T) {
 }
 
 func TestVerifyPeerAuthorization_UnknownLocalRoleNoPolicy(t *testing.T) {
-	res := verifyPeerAuthorization("", buildMeta(nil))
+	res := verifyPeerAuthorization("", nil)
 	if res.Status != ar.StatusSuccess {
 		t.Fatalf("expected success, got %q", res.Status)
-	}
-}
-
-func TestVerifyPeerAuthorization_NilMetadata(t *testing.T) {
-	res := verifyPeerAuthorization("example:ns/a", nil)
-	if res.Status != ar.StatusFail {
-		t.Fatalf("expected fail for nil meta, got %q", res.Status)
-	}
-	if !slices.Contains(res.ErrorCodes, ar.Internal) {
-		t.Fatalf("expected Internal error, got %v", res.ErrorCodes)
 	}
 }
