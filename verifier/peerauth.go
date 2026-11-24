@@ -16,7 +16,6 @@
 package verifier
 
 import (
-	"fmt"
 	"slices"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -26,17 +25,11 @@ import (
 // this peer. It verifies that the peer-set defined in the prover's image description contains our
 // local role, i.e., our image description name. If no peer policies are specified, interaction
 // with any attested peer is allowed and this check passes
-func verifyPeerAuthorization(localRole string, meta *ar.MetadataSummary) ar.Result {
-	if meta == nil {
-		r := ar.Result{}
-		r.Fail(ar.Internal, fmt.Errorf("internal error: metadata not present"))
-		return r
-	}
-	if len(meta.ImageDescriptionResult.AllowedPeers) == 0 {
+func verifyPeerAuthorization(localRole string, allowed []string) ar.Result {
+	if len(allowed) == 0 {
 		// No peers specified, always pass
 		return ar.Result{Status: ar.StatusSuccess}
 	}
-	allowed := meta.ImageDescriptionResult.AllowedPeers
 
 	res := ar.Result{ExpectedOneOf: allowed}
 	if localRole == "" {

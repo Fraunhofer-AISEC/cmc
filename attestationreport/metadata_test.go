@@ -97,7 +97,7 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 		checkOmsp bool
 		want      Status
 		wantCode  ErrorCode
-		check     func(t *testing.T, got MetadataSummary)
+		check     func(t *testing.T, set *MetadataSet, got MetadataSummary)
 	}{
 		{
 			name: "Unique Items",
@@ -105,13 +105,25 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 				omspResponse("2025-04-01T20:00:00Z")),
 			checkOmsp: true,
 			want:      StatusSuccess,
-			check: func(t *testing.T, got MetadataSummary) {
+			check: func(t *testing.T, set *MetadataSet, got MetadataSummary) {
 				if got.ImageDescriptionResult.Name != validImageDescription.Name {
 					t.Errorf("image description %q, want %q",
 						got.ImageDescriptionResult.Name, validImageDescription.Name)
 				}
-				if got.CompanyDescriptionResult == nil {
+				if set.ImageDescription.Name != validImageDescription.Name {
+					t.Errorf("image description %q in set, want %q",
+						set.ImageDescription.Name, validImageDescription.Name)
+				}
+				if got.CompanyDescriptionResult == nil || set.CompanyDescription == nil {
 					t.Errorf("company description missing")
+				}
+				wantOrder := []string{validRtmManifest.Name, validOsManifest.Name,
+					validAppManifest.Name}
+				for i, name := range wantOrder {
+					if set.Manifests[i].Name != name || got.ManifestResults[i].Name != name {
+						t.Errorf("manifest %v: got %q (set) and %q (result), want %q", i,
+							set.Manifests[i].Name, got.ManifestResults[i].Name, name)
+					}
 				}
 				if len(got.OmspResults) != 1 {
 					t.Errorf("got %v OMSP results, want 1", len(got.OmspResults))
@@ -129,7 +141,7 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 				withVersion(validImageDescription, "2024-01-01T00:00:00Z")),
 			want:     StatusFail,
 			wantCode: MultipleImageDescriptions,
-			check: func(t *testing.T, got MetadataSummary) {
+			check: func(t *testing.T, set *MetadataSet, got MetadataSummary) {
 				if got.ImageDescriptionResult.Name != "" {
 					t.Errorf("image description %q selected despite duplicates",
 						got.ImageDescriptionResult.Name)
@@ -142,8 +154,8 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 				withVersion(companyDescription, "2024-01-01T00:00:00Z")),
 			want:     StatusFail,
 			wantCode: MultipleCompanyDescriptions,
-			check: func(t *testing.T, got MetadataSummary) {
-				if got.CompanyDescriptionResult != nil {
+			check: func(t *testing.T, set *MetadataSet, got MetadataSummary) {
+				if got.CompanyDescriptionResult != nil || set.CompanyDescription != nil {
 					t.Errorf("company description selected despite duplicates")
 				}
 			},
@@ -155,11 +167,11 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 			checkOmsp: true,
 			want:      StatusFail,
 			wantCode:  MultipleOmspResponses,
-			check: func(t *testing.T, got MetadataSummary) {
+			check: func(t *testing.T, set *MetadataSet, got MetadataSummary) {
 				if len(got.OmspResults) != 0 {
 					t.Errorf("got %v OMSP results despite duplicates", len(got.OmspResults))
 				}
-				rtmResult := RootManifest(got.ManifestResults)
+				rtmResult := got.ManifestResults[slices.IndexFunc(set.Manifests, IsRootManifest)]
 				if rtmResult.OmspStatus == nil ||
 					!slices.Contains(rtmResult.OmspStatus.ErrorCodes, ManifestRevocationUnknown) {
 					t.Errorf("RTM revocation status %v, want %v",
@@ -171,10 +183,17 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, status := ParseAndVerifyMetadata([]*x509.Certificate{chain[len(chain)-1]},
+			set, got, err := ParseAndVerifyMetadata([]*x509.Certificate{chain[len(chain)-1]},
 				tt.items, tt.checkOmsp)
-			if status != tt.want {
-				t.Errorf("status = %v, want %v", status, tt.want)
+			if got.Summary.Status != tt.want {
+				t.Errorf("status = %v, want %v", got.Summary.Status, tt.want)
+			}
+			if (err != nil) != (tt.want == StatusFail) {
+				t.Errorf("error = %v, want status %v", err, tt.want)
+			}
+			if len(set.Manifests) != len(got.ManifestResults) {
+				t.Errorf("got %v manifests and %v manifest results", len(set.Manifests),
+					len(got.ManifestResults))
 			}
 			if tt.wantCode != NotSpecified {
 				if len(got.UnknownResults) != 2 {
@@ -192,7 +211,7 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 			} else if len(got.UnknownResults) != 0 {
 				t.Errorf("got %v unknown results, want 0", len(got.UnknownResults))
 			}
-			tt.check(t, got)
+			tt.check(t, set, got)
 		})
 	}
 }
@@ -200,7 +219,8 @@ func Test_parseAndVerifyMetadataDuplicates(t *testing.T) {
 func Test_checkMetadataCompatibility(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 	type args struct {
-		metadata *MetadataSummary
+		imageDescription Metadata
+		manifests        []Metadata
 	}
 	tests := []struct {
 		name  string
@@ -213,7 +233,8 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 			want:  StatusSuccess,
 			want1: []ErrorCode{},
 			args: args{
-				metadata: validMetadata,
+				imageDescription: validImageDescription,
+				manifests:        []Metadata{validRtmManifest, validOsManifest, validAppManifest},
 			},
 		},
 		{
@@ -221,7 +242,8 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 			want:  StatusFail,
 			want1: []ErrorCode{NoRootManifest},
 			args: args{
-				metadata: noRootManifestMetadata,
+				imageDescription: validImageDescription,
+				manifests:        []Metadata{validOsManifest, validAppManifest},
 			},
 		},
 		{
@@ -229,7 +251,8 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 			want:  StatusFail,
 			want1: []ErrorCode{MultipleRootManifests},
 			args: args{
-				metadata: multipleRootManifestMetadata,
+				imageDescription: validImageDescription,
+				manifests:        []Metadata{validRtmManifest, validRtmManifest, validOsManifest, validAppManifest},
 			},
 		},
 		{
@@ -237,7 +260,8 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 			want:  StatusFail,
 			want1: []ErrorCode{},
 			args: args{
-				metadata: missingManifestMetadata,
+				imageDescription: validImageDescription,
+				manifests:        []Metadata{validRtmManifest, validOsManifest},
 			},
 		},
 		{
@@ -245,14 +269,28 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 			want:  StatusFail,
 			want1: []ErrorCode{},
 			args: args{
-				metadata: missingDescriptionMetadata,
+				imageDescription: incompleteImageDescription,
+				manifests:        []Metadata{validRtmManifest, validOsManifest, validAppManifest},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CheckMetadataCompatibility(tt.args.metadata)
+			entries := make([]metadataEntry, 0, len(tt.args.manifests))
+			for _, m := range tt.args.manifests {
+				entries = append(entries, metadataEntry{meta: m, result: newMetadataResult(&m)})
+			}
+			got, sorted := checkMetadataCompatibility(tt.args.imageDescription, entries)
+			if len(sorted) != len(entries) {
+				t.Errorf("checkMetadataCompatibility() returned %v manifests, want %v",
+					len(sorted), len(entries))
+			}
+			for _, e := range sorted {
+				if e.meta.Name != e.result.Name {
+					t.Errorf("manifest %q paired with result %q", e.meta.Name, e.result.Name)
+				}
+			}
 			if got.Summary.Status != tt.want {
 				t.Errorf("checkMetadataCompatibility() got = %v, want %v", got, tt.want)
 			}
@@ -278,22 +316,22 @@ func Test_checkMetadataCompatibility(t *testing.T) {
 func Test_rootManifest(t *testing.T) {
 	tests := []struct {
 		name      string
-		manifests []MetadataResult
+		manifests []Metadata
 		want      string
 	}{
 		{
 			name:      "Root First",
-			manifests: []MetadataResult{validRtmResult, validOsResult, validAppResult},
-			want:      validRtmResult.Name,
+			manifests: []Metadata{validRtmManifest, validOsManifest, validAppManifest},
+			want:      validRtmManifest.Name,
 		},
 		{
 			name:      "Root Last",
-			manifests: []MetadataResult{validAppResult, validOsResult, validRtmResult},
-			want:      validRtmResult.Name,
+			manifests: []Metadata{validAppManifest, validOsManifest, validRtmManifest},
+			want:      validRtmManifest.Name,
 		},
 		{
 			name:      "No Root",
-			manifests: []MetadataResult{validOsResult, validAppResult},
+			manifests: []Metadata{validOsManifest, validAppManifest},
 			want:      "",
 		},
 		{
@@ -314,7 +352,7 @@ func Test_rootManifest(t *testing.T) {
 
 func Test_collectComponents(t *testing.T) {
 	type args struct {
-		metadata []MetadataResult
+		manifests []Metadata
 	}
 	tests := []struct {
 		name    string
@@ -325,7 +363,7 @@ func Test_collectComponents(t *testing.T) {
 		{
 			name: "Success",
 			args: args{
-				metadata: []MetadataResult{
+				manifests: []Metadata{
 					rtmManifest,
 					osManifest,
 					appManifest1,
@@ -338,7 +376,7 @@ func Test_collectComponents(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := CollectComponents(tt.args.metadata, nil)
+			got, err := CollectComponents(tt.args.manifests, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("collectComponents() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -467,86 +505,6 @@ var (
 			},
 		},
 	}
-
-	validCompanyDescription = Metadata{
-		MetaInfo: MetaInfo{
-			Type: TYPE_COMPANY_DESCRIPTION,
-			Name: "Test Company Description",
-		},
-	}
-
-	validImageDescriptionResult = MetadataResult{
-		Metadata: validImageDescription,
-	}
-
-	incompleteImageDescriptionResult = MetadataResult{
-		Metadata: incompleteImageDescription,
-	}
-
-	validCompDescResult = &MetadataResult{
-		Metadata: validCompanyDescription,
-	}
-
-	validRtmResult = MetadataResult{
-		Metadata: validRtmManifest,
-	}
-
-	validOsResult = MetadataResult{
-		Metadata: validOsManifest,
-	}
-
-	validAppResult = MetadataResult{
-		Metadata: validAppManifest,
-	}
-
-	validMetadata = &MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []MetadataResult{
-			validRtmResult,
-			validOsResult,
-			validAppResult,
-		},
-	}
-
-	noRootManifestMetadata = &MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []MetadataResult{
-			validOsResult,
-			validAppResult,
-		},
-	}
-
-	multipleRootManifestMetadata = &MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []MetadataResult{
-			validRtmResult,
-			validRtmResult,
-			validOsResult,
-			validAppResult,
-		},
-	}
-
-	missingManifestMetadata = &MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []MetadataResult{
-			validRtmResult,
-			validOsResult,
-		},
-	}
-
-	missingDescriptionMetadata = &MetadataSummary{
-		ImageDescriptionResult:   incompleteImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []MetadataResult{
-			validRtmResult,
-			validOsResult,
-			validAppResult,
-		},
-	}
 )
 
 // variables for Test_collectComponents
@@ -595,47 +553,39 @@ var (
 		TRUST_ANCHOR_SW:  refs[3:],
 	}
 
-	rtmManifest = MetadataResult{
-		Metadata: Metadata{
-			Manifest: Manifest{
-				Sbom: &Sbom{
-					Components: []Component{
-						refs[0],
-						refs[2],
-					},
+	rtmManifest = Metadata{
+		Manifest: Manifest{
+			Sbom: &Sbom{
+				Components: []Component{
+					refs[0],
+					refs[2],
 				},
 			},
 		},
 	}
 
-	osManifest = MetadataResult{
-		Metadata: Metadata{
-			Manifest: Manifest{
-				Sbom: &Sbom{
-					Components: []Component{
-						refs[1],
-					},
+	osManifest = Metadata{
+		Manifest: Manifest{
+			Sbom: &Sbom{
+				Components: []Component{
+					refs[1],
 				},
 			},
 		},
 	}
 
-	appManifest1 = MetadataResult{
-		Metadata: Metadata{
-			Manifest: Manifest{
-				Sbom: &Sbom{
-					Components: []Component{refs[3]},
-				},
+	appManifest1 = Metadata{
+		Manifest: Manifest{
+			Sbom: &Sbom{
+				Components: []Component{refs[3]},
 			},
 		},
 	}
 
-	appManifest2 = MetadataResult{
-		Metadata: Metadata{
-			Manifest: Manifest{
-				Sbom: &Sbom{
-					Components: []Component{refs[4]},
-				},
+	appManifest2 = Metadata{
+		Manifest: Manifest{
+			Sbom: &Sbom{
+				Components: []Component{refs[4]},
 			},
 		},
 	}

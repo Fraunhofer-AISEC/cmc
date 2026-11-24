@@ -171,18 +171,19 @@ func Verify(arRaw, nonce []byte, opts VerifyOptions) *ar.AttestationResult {
 
 	// Verify and unpack metadata from attestation report
 	log.Debugf("Verifying metadata from prover %v", result.Prover.Hostname)
-	metaResults, status := ar.ParseAndVerifyMetadata(opts.MetadataCas, collectedMetadata, opts.CheckOmsp)
-	switch status {
-	case ar.StatusSuccess:
-		log.Debug("Successfully verified metadata")
-	case ar.StatusFail:
-		result.Fail(ar.VerifyMetadata)
-	case ar.StatusWarn:
+	metadata, metaSummary, err := ar.ParseAndVerifyMetadata(opts.MetadataCas, collectedMetadata,
+		opts.CheckOmsp)
+	switch {
+	case err != nil:
+		result.Fail(ar.VerifyMetadata, err)
+	case metaSummary.Summary.Status == ar.StatusWarn:
 		result.Warn(ar.VerifyMetadata)
+	default:
+		log.Debug("Successfully verified metadata")
 	}
 
-	result.Metadata = metaResults
-	result.Name = metaResults.ImageDescriptionResult.Name
+	result.Metadata = metaSummary
+	result.Name = metadata.ImageDescription.Name
 	if report.Name != "" {
 		result.Prover.Hostname = report.Name
 	} else {
@@ -221,14 +222,14 @@ func Verify(arRaw, nonce []byte, opts VerifyOptions) *ar.AttestationResult {
 		log.Debugf("Report carries %v prover-asserted claim(s)", len(report.Context.Claims))
 	}
 
-	refVals, err := ar.CollectComponents(metaResults.ManifestResults, metaResults.ImageDescriptionResult.Descriptions)
+	refVals, err := ar.CollectComponents(metadata.Manifests, metadata.ImageDescription.Descriptions)
 	if err != nil {
 		result.Fail(ar.RefValTypeNotSupported, err)
 		return result
 	}
 
 	// Hardware policies and CA fingerprints are taken from the root manifest
-	root := ar.RootManifest(metaResults.ManifestResults)
+	root := ar.RootManifest(metadata.Manifests)
 
 	// Collect evidence collateral into a map for combined processing with evidences
 	collateral := make(map[string]ar.Collateral)
@@ -309,7 +310,8 @@ Loop:
 	// Check if we are allowed to establish a connection with this peer in case peer policies are
 	// provided
 	if !opts.SkipPeerAuth {
-		result.PeerAuth = verifyPeerAuthorization(opts.LocalRole, &result.Metadata)
+		result.PeerAuth = verifyPeerAuthorization(opts.LocalRole,
+			metadata.ImageDescription.AllowedPeers)
 		result.Summary.Status = result.Summary.Status.Worse(result.PeerAuth.Status)
 	}
 
@@ -416,7 +418,7 @@ func coveredTrustAnchors(evidences []ar.Evidence) map[string]bool {
 
 // requiredTrustAnchors returns the sorted trust anchors with mandatory reference values or a
 // hardware policy in the root manifest
-func requiredTrustAnchors(refVals map[string][]ar.Component, root ar.MetadataResult) []string {
+func requiredTrustAnchors(refVals map[string][]ar.Component, root ar.Metadata) []string {
 	required := make(map[string]bool)
 	for ta, components := range refVals {
 		if slices.ContainsFunc(components, func(c ar.Component) bool { return !c.Optional }) {

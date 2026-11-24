@@ -26,7 +26,7 @@ import (
 
 // The attestation result version
 const (
-	resultVersion = "3.7.0"
+	resultVersion = "3.8.0"
 )
 
 func GetResultVersion() string {
@@ -135,6 +135,7 @@ type Result struct {
 //
 
 type MetadataSummary struct {
+	Summary                  Result              `json:"summary" cbor:"6,keyasint"`
 	ImageDescriptionResult   MetadataResult      `json:"imageDescriptionResult" cbor:"0,keyasint"`
 	ManifestResults          []MetadataResult    `json:"manifestResults" cbor:"1,keyasint"`
 	CompanyDescriptionResult *MetadataResult     `json:"companyDescriptionResult,omitempty" cbor:"2,keyasint,omitempty"`
@@ -143,16 +144,21 @@ type MetadataSummary struct {
 	OmspResults              []MetadataResult    `json:"omspSignatureResults,omitempty" cbor:"5,keyasint,omitempty"`
 }
 
+// MetadataResult holds the verification result of a single metadata item together with the
+// metadata fields required for display. The metadata content itself is provided via MetadataSet
 type MetadataResult struct {
-	Metadata
-	Summary          Result            `json:"summary" cbor:"40,keyasint"`
-	ValidityCheck    Result            `json:"validityCheck,omitzero" cbor:"41,keyasint,omitzero"`
-	SignatureCheck   []SignatureResult `json:"signatureValidation,omitempty" cbor:"42,keyasint,omitempty"`
-	Digest           string            `json:"digest,omitempty" cbor:"50,keyasint,omitempty"`
-	OmspValidity     *Result           `json:"omspValidity,omitempty" cbor:"51,keyasint,omitempty"`
-	OmspStatus       *Result           `json:"omspStatus,omitempty" cbor:"52,keyasint,omitempty"`
-	RevocationTime   string            `json:"revocationTime,omitempty" cbor:"53,keyasint,omitempty"`
-	RevocationReason string            `json:"revocationReason,omitempty" cbor:"54,keyasint,omitempty"`
+	MetaInfo
+	BaseLayers       []string               `json:"baseLayers,omitempty" cbor:"12,keyasint,omitempty"`
+	Details          map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
+	Location         string                 `json:"location,omitempty" cbor:"20,keyasint,omitempty"`
+	Summary          Result                 `json:"summary" cbor:"40,keyasint"`
+	ValidityCheck    Result                 `json:"validityCheck,omitzero" cbor:"41,keyasint,omitzero"`
+	SignatureCheck   []SignatureResult      `json:"signatureValidation,omitempty" cbor:"42,keyasint,omitempty"`
+	Digest           string                 `json:"digest,omitempty" cbor:"50,keyasint,omitempty"`
+	OmspValidity     *Result                `json:"omspValidity,omitempty" cbor:"51,keyasint,omitempty"`
+	OmspStatus       *Result                `json:"omspStatus,omitempty" cbor:"52,keyasint,omitempty"`
+	RevocationTime   string                 `json:"revocationTime,omitempty" cbor:"53,keyasint,omitempty"`
+	RevocationReason string                 `json:"revocationReason,omitempty" cbor:"54,keyasint,omitempty"`
 }
 
 type CompatibilityResult struct {

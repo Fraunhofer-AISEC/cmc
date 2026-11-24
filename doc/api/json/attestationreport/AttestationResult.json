@@ -115,53 +115,6 @@
       },
       "type": "object"
     },
-    "Component": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "hashes": {
-          "items": {
-            "$ref": "#/$defs/ReferenceHash"
-          },
-          "type": "array"
-        },
-        "version": {
-          "type": "string"
-        },
-        "optional": {
-          "type": "boolean"
-        },
-        "description": {
-          "type": "string"
-        },
-        "properties": {
-          "items": {
-            "$ref": "#/$defs/Property"
-          },
-          "type": "array"
-        },
-        "eventdata": {
-          "$ref": "#/$defs/EventData"
-        },
-        "ctrData": {
-          "$ref": "#/$defs/CtrData"
-        },
-        "intelCollateral": {
-          "$ref": "#/$defs/IntelCollateral"
-        },
-        "purl": {
-          "type": "string"
-        },
-        "alternativeGroup": {
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
     "CtrData": {
       "properties": {
         "configSha256": {
@@ -722,51 +675,6 @@
             "$ref": "#/$defs/EFIDevicePath"
           },
           "type": "array"
-        }
-      },
-      "type": "object"
-    },
-    "IntelCollateral": {
-      "properties": {
-        "tcbInfo": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "qeIdentity": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "rootCaCrl": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "pckCrl": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "pckCrlIntermediateCert": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "pckCrlRootCert": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "tcbInfoIntermediateCert": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "tcbInfoRootCert": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "qeIdentityIntermediateCert": {
-          "type": "string",
-          "contentEncoding": "base64"
-        },
-        "qeIdentityRootCert": {
-          "type": "string",
-          "contentEncoding": "base64"
         }
       },
       "type": "object"
@@ -1354,26 +1262,6 @@
       },
       "type": "object"
     },
-    "ManifestDescription": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "manifest": {
-          "type": "string"
-        },
-        "ociRules": {
-          "type": "object"
-        }
-      },
-      "type": "object"
-    },
     "MeasurementResult": {
       "properties": {
         "type": {
@@ -1426,65 +1314,17 @@
         "description": {
           "type": "string"
         },
-        "sbom": {
-          "$ref": "#/$defs/Sbom"
-        },
-        "developerCommonName": {
-          "type": "string"
-        },
         "baseLayers": {
           "items": {
             "type": "string"
           },
           "type": "array"
         },
-        "caFingerprints": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "snpPolicy": {
-          "$ref": "#/$defs/SnpPolicy"
-        },
-        "tdxPolicy": {
-          "$ref": "#/$defs/TdxPolicy"
-        },
-        "sgxPolicy": {
-          "$ref": "#/$defs/SgxPolicy"
-        },
         "details": {
           "type": "object"
         },
-        "omspServer": {
-          "type": "string"
-        },
         "location": {
           "type": "string"
-        },
-        "descriptions": {
-          "items": {
-            "$ref": "#/$defs/ManifestDescription"
-          },
-          "type": "array"
-        },
-        "peers": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "server": {
-          "type": "string"
-        },
-        "producedAt": {
-          "type": "string"
-        },
-        "responses": {
-          "items": {
-            "$ref": "#/$defs/SingleOmspResponse"
-          },
-          "type": "array"
         },
         "summary": {
           "$ref": "#/$defs/Result"
@@ -1518,6 +1358,9 @@
     },
     "MetadataSummary": {
       "properties": {
+        "summary": {
+          "$ref": "#/$defs/Result"
+        },
         "imageDescriptionResult": {
           "$ref": "#/$defs/MetadataResult"
         },
@@ -1705,17 +1548,6 @@
       },
       "type": "object"
     },
-    "Property": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "value": {
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
     "QeReportResult": {
       "properties": {
         "summary": {
@@ -1744,19 +1576,6 @@
         },
         "date": {
           "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "ReferenceHash": {
-      "properties": {
-        "alg": {
-          "type": "string"
-        },
-        "content": {
-          "type": "string",
-          "pattern": "^([0-9a-fA-F]{2})*$",
-          "contentEncoding": "base16"
         }
       },
       "type": "object"
@@ -1803,55 +1622,6 @@
         },
         "readonly": {
           "type": "boolean"
-        }
-      },
-      "type": "object"
-    },
-    "SGXAttributes": {
-      "properties": {
-        "initted": {
-          "type": "boolean"
-        },
-        "debug": {
-          "type": "boolean"
-        },
-        "mode64Bit": {
-          "type": "boolean"
-        },
-        "provisionKey": {
-          "type": "boolean"
-        },
-        "eInitToken": {
-          "type": "boolean"
-        },
-        "kss": {
-          "type": "boolean"
-        },
-        "legacy": {
-          "type": "boolean"
-        },
-        "avx": {
-          "type": "boolean"
-        }
-      },
-      "type": "object"
-    },
-    "Sbom": {
-      "properties": {
-        "bomFormat": {
-          "type": "string"
-        },
-        "specVersion": {
-          "type": "string"
-        },
-        "version": {
-          "type": "integer"
-        },
-        "components": {
-          "items": {
-            "$ref": "#/$defs/Component"
-          },
-          "type": "array"
         }
       },
       "type": "object"
@@ -1910,31 +1680,6 @@
         },
         "avx": {
           "$ref": "#/$defs/BooleanMatch"
-        }
-      },
-      "type": "object"
-    },
-    "SgxPolicy": {
-      "properties": {
-        "quoteVersion": {
-          "type": "integer"
-        },
-        "mrSigner": {
-          "type": "string",
-          "pattern": "^([0-9a-fA-F]{2})*$",
-          "contentEncoding": "base16"
-        },
-        "isvSvn": {
-          "type": "integer"
-        },
-        "attributes": {
-          "$ref": "#/$defs/SGXAttributes"
-        },
-        "acceptedTcbStatuses": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         }
       },
       "type": "object"
@@ -2001,94 +1746,6 @@
       },
       "type": "object"
     },
-    "SingleOmspResponse": {
-      "properties": {
-        "manifestHash": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "thisUpdate": {
-          "type": "string"
-        },
-        "nextUpdate": {
-          "type": "string"
-        },
-        "revocationTime": {
-          "type": "string"
-        },
-        "revocationReason": {
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "SnpFw": {
-      "properties": {
-        "build": {
-          "type": "integer"
-        },
-        "major": {
-          "type": "integer"
-        },
-        "minor": {
-          "type": "integer"
-        }
-      },
-      "type": "object"
-    },
-    "SnpGuestPolicy": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "singleSocket": {
-          "type": "boolean"
-        },
-        "debug": {
-          "type": "boolean"
-        },
-        "migration": {
-          "type": "boolean"
-        },
-        "smt": {
-          "type": "boolean"
-        },
-        "abiMajor": {
-          "type": "integer"
-        },
-        "abiMinor": {
-          "type": "integer"
-        }
-      },
-      "type": "object"
-    },
-    "SnpPolicy": {
-      "properties": {
-        "reportMinVersion": {
-          "type": "integer"
-        },
-        "reportMaxVersion": {
-          "type": "integer"
-        },
-        "policy": {
-          "$ref": "#/$defs/SnpGuestPolicy"
-        },
-        "versions": {
-          "items": {
-            "$ref": "#/$defs/SnpVersion"
-          },
-          "type": "array"
-        },
-        "hostData": {
-          "type": "string",
-          "pattern": "^([0-9a-fA-F]{2})*$",
-          "contentEncoding": "base16"
-        }
-      },
-      "type": "object"
-    },
     "SnpResult": {
       "properties": {
         "reportVersionMatch": {
@@ -2111,40 +1768,6 @@
         },
         "hostDataCheck": {
           "$ref": "#/$defs/Result"
-        }
-      },
-      "type": "object"
-    },
-    "SnpTcb": {
-      "properties": {
-        "fmc": {
-          "type": "integer"
-        },
-        "bl": {
-          "type": "integer"
-        },
-        "tee": {
-          "type": "integer"
-        },
-        "snp": {
-          "type": "integer"
-        },
-        "ucode": {
-          "type": "integer"
-        }
-      },
-      "type": "object"
-    },
-    "SnpVersion": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "fw": {
-          "$ref": "#/$defs/SnpFw"
-        },
-        "tcb": {
-          "$ref": "#/$defs/SnpTcb"
         }
       },
       "type": "object"
@@ -2273,43 +1896,6 @@
       },
       "type": "object"
     },
-    "TDAttributes": {
-      "properties": {
-        "debug": {
-          "type": "boolean"
-        },
-        "septVEDisable": {
-          "type": "boolean"
-        },
-        "pks": {
-          "type": "boolean"
-        },
-        "kl": {
-          "type": "boolean"
-        }
-      },
-      "type": "object"
-    },
-    "TDId": {
-      "properties": {
-        "mrOwner": {
-          "type": "string",
-          "pattern": "^([0-9a-fA-F]{2})*$",
-          "contentEncoding": "base16"
-        },
-        "mrOwnerConfig": {
-          "type": "string",
-          "pattern": "^([0-9a-fA-F]{2})*$",
-          "contentEncoding": "base16"
-        },
-        "mrConfigId": {
-          "type": "string",
-          "pattern": "^([0-9a-fA-F]{2})*$",
-          "contentEncoding": "base16"
-        }
-      },
-      "type": "object"
-    },
     "TcbCheck": {
       "properties": {
         "result": {
@@ -2389,39 +1975,6 @@
         },
         "kl": {
           "$ref": "#/$defs/BooleanMatch"
-        }
-      },
-      "type": "object"
-    },
-    "TdxPolicy": {
-      "properties": {
-        "quoteVersion": {
-          "type": "integer"
-        },
-        "tdId": {
-          "$ref": "#/$defs/TDId"
-        },
-        "xfam": {
-          "items": {
-            "type": "string",
-            "pattern": "^([0-9a-fA-F]{2})*$",
-            "contentEncoding": "base16"
-          },
-          "type": "array"
-        },
-        "tdAttributes": {
-          "$ref": "#/$defs/TDAttributes"
-        },
-        "acceptedTcbStatuses": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "xfamIgnoreMask": {
-          "type": "string",
-          "pattern": "^([0-9a-fA-F]{2})*$",
-          "contentEncoding": "base16"
         }
       },
       "type": "object"
