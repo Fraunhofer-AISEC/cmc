@@ -17,7 +17,6 @@ package attestationreport
 
 import (
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -101,6 +100,23 @@ const (
 	StatusFail    Status = "fail"
 	StatusWarn    Status = "warn"
 )
+
+// statusRank orders statuses by severity. An unset status is neutral, as many optional checks
+// legitimately stay unset
+var statusRank = map[Status]int{
+	"":            0,
+	StatusSuccess: 1,
+	StatusWarn:    2,
+	StatusFail:    3,
+}
+
+// Worse returns the more severe of both statuses (fail > warn > success > unset)
+func (s Status) Worse(o Status) Status {
+	if statusRank[o] > statusRank[s] {
+		return o
+	}
+	return s
+}
 
 // Result is a generic struct do display if a verification of a measured/provided data structure
 // against a reference data structure was successful
@@ -838,37 +854,33 @@ func (e ErrorCode) String() string {
 
 func (r *Result) Fail(code ErrorCode, errs ...error) {
 	r.Status = StatusFail
-	if code != NotSpecified {
-		r.ErrorCodes = append(r.ErrorCodes, code)
-	}
-	if err := errors.Join(errs...); err != nil {
-		msg := err.Error()
-		r.appendDetails(msg)
-		log.Warnf("Verification failed with error code %v: %v", code.String(), msg)
-	} else if code != NotSpecified {
-		log.Warnf("Verification failed with error code %v", code.String())
-	} else {
-		log.Warnf("Verification failed")
-	}
+	r.record("Verification failed", code, errs)
 }
 
 func (r *Result) Warn(code ErrorCode, errs ...error) {
-	// Make sure, an already failed result is not set to warn
-	if r.Status != StatusFail {
-		r.Status = StatusWarn
-	}
+	r.Status = r.Status.Worse(StatusWarn)
+	r.record("Verification passed with warning", code, errs)
+}
+
+// record appends the error code and all error messages to the result and logs them
+func (r *Result) record(prefix string, code ErrorCode, errs []error) {
 	if code != NotSpecified {
 		r.ErrorCodes = append(r.ErrorCodes, code)
+		prefix = fmt.Sprintf("%v with error code %v", prefix, code.String())
 	}
-	if err := errors.Join(errs...); err != nil {
-		msg := err.Error()
-		r.appendDetails(msg)
-		log.Warnf("Verification passed with warning %v: %v", code.String(), msg)
-	} else if code != NotSpecified {
-		log.Warnf("Verification passed with warning %v", code.String())
-	} else {
-		log.Warnf("Verification passed with warning")
+	var msgs []string
+	for _, err := range errs {
+		if err != nil {
+			msgs = append(msgs, err.Error())
+		}
 	}
+	if len(msgs) == 0 {
+		log.Warn(prefix)
+		return
+	}
+	msg := strings.Join(msgs, "; ")
+	r.appendDetails(msg)
+	log.Warnf("%v: %v", prefix, msg)
 }
 
 func (r *Result) appendDetails(msg string) {
@@ -895,23 +907,11 @@ func DigestTypeFromBool(matched bool, unmatched string) string {
 }
 
 func (r *AttestationResult) Fail(code ErrorCode, errs ...error) {
-	if len(errs) > 0 {
-		for _, err := range errs {
-			r.Summary.Fail(code, err)
-		}
-	} else {
-		r.Summary.Fail(code)
-	}
+	r.Summary.Fail(code, errs...)
 }
 
 func (r *AttestationResult) Warn(code ErrorCode, errs ...error) {
-	if len(errs) > 0 {
-		for _, err := range errs {
-			r.Summary.Warn(code, err)
-		}
-	} else {
-		r.Summary.Warn(code)
-	}
+	r.Summary.Warn(code, errs...)
 }
 
 func (r *Result) PrintErr(format string, args ...interface{}) {
