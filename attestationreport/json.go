@@ -65,17 +65,15 @@ func (s jsonSerializer) Unmarshal(data []byte, v any) error {
 // Verify verifies signatures and certificate chains of JWS tokens. The verifier interface must
 // either be a list of trusted CA certificates, or a trusted public key, or a VerifierOption,
 // which can be using the system certificates or the embedded self-signed certificate.
-func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, []byte, bool) {
+// It returns the payload, the per-signature results and the overall result, which is only
+// successful if all signatures and certificate chains could be verified.
+func (s jsonSerializer) Verify(data []byte, verifier Verifier) ([]byte, []SignatureResult, Result) {
 
 	var rootpool *x509.CertPool
 	var verifyingKey crypto.PublicKey
 	var err error
-	result := MetadataResult{
-		Summary: Result{
-			Status: StatusSuccess,
-		},
-	}
-	success := true
+	result := Result{Status: StatusSuccess}
+	var sigs []SignatureResult
 	verifyCertChain := true
 
 	log.Tracef("Verifying JWS object...")
@@ -89,12 +87,12 @@ func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		jose.ES512,
 	})
 	if err != nil {
-		result.Summary.Fail(ParseJSON, err)
-		return result, nil, false
+		result.Fail(ParseJSON, err)
+		return nil, sigs, result
 	}
 	if len(jwsData.Signatures) == 0 {
-		result.Summary.Fail(JWSNoSignatures)
-		return result, nil, false
+		result.Fail(JWSNoSignatures)
+		return nil, sigs, result
 	}
 	index := make([]int, len(jwsData.Signatures))
 	payloads := make([][]byte, len(jwsData.Signatures))
@@ -119,12 +117,12 @@ func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		log.Trace("Using system certificate pool for JWS verification")
 		rootpool, err = x509.SystemCertPool()
 		if err != nil {
-			result.Summary.Fail(SetupSystemCA, err)
-			return result, nil, false
+			result.Fail(SetupSystemCA, err)
+			return nil, sigs, result
 		}
 	default:
-		result.Summary.Fail(JWSUnknownVerifierType)
-		return result, nil, false
+		result.Fail(JWSUnknownVerifierType)
+		return nil, sigs, result
 	}
 
 	opts := x509.VerifyOptions{
@@ -134,15 +132,14 @@ func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 
 	for i, sig := range jwsData.Signatures {
 
-		result.SignatureCheck = append(result.SignatureCheck, SignatureResult{})
+		sigs = append(sigs, SignatureResult{})
 
 		if verifyCertChain {
 			// Verify the certificate chain present in the x5c header against the given roots
 			certs, err := sig.Protected.Certificates(opts)
 			if err != nil {
-				result.Summary.Status = StatusFail
-				result.SignatureCheck[i].CertChainCheck.Fail(VerifyCertChain, err)
-				success = false
+				result.Status = StatusFail
+				sigs[i].CertChainCheck.Fail(VerifyCertChain, err)
 				continue
 			}
 			// Store details from validated certificate chain(s)
@@ -151,9 +148,9 @@ func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 				for _, cert := range chain {
 					chainExtracted = append(chainExtracted, ExtractX509Infos(cert))
 				}
-				result.SignatureCheck[i].Certs = append(result.SignatureCheck[i].Certs, chainExtracted)
+				sigs[i].Certs = append(sigs[i].Certs, chainExtracted)
 			}
-			result.SignatureCheck[i].CertChainCheck.Status = StatusSuccess
+			sigs[i].CertChainCheck.Status = StatusSuccess
 			verifyingKey = certs[0][0].PublicKey
 
 			log.Tracef("Using public key from cert %v for signature verification", certs[0][0].Subject.CommonName)
@@ -162,34 +159,31 @@ func (s jsonSerializer) Verify(data []byte, verifier Verifier) (MetadataResult, 
 		// The JSONWebKey uses the certificates from the x5c header, already validated before
 		index[i], _, payloads[i], err = jwsData.VerifyMulti(verifyingKey)
 		if err == nil {
-			result.SignatureCheck[i].SignCheck.Status = StatusSuccess
+			sigs[i].SignCheck.Status = StatusSuccess
 		} else {
-			result.Summary.Status = StatusFail
-			result.SignatureCheck[i].SignCheck.Fail(VerifySignature, err)
-			success = false
+			result.Status = StatusFail
+			sigs[i].SignCheck.Fail(VerifySignature, err)
 		}
 
 		if index[i] != i {
-			result.Summary.Fail(JWSSignatureOrder,
+			result.Fail(JWSSignatureOrder,
 				fmt.Errorf("order of signatures incorrect (index %v != iterator %v)", index[i], i))
-			success = false
 		}
 
 		if i > 0 {
 			if !bytes.Equal(payloads[i], payloads[i-1]) {
-				result.Summary.Fail(JWSPayload)
-				success = false
+				result.Fail(JWSPayload)
 			}
 		}
 	}
 
-	if success {
+	if result.Status == StatusSuccess {
 		log.Trace("Successfully verified JWS object")
 	}
 
 	payload := payloads[0]
 
-	return result, payload, success
+	return payload, sigs, result
 }
 
 // Custom type for JSON unmarshaller as byte arrays are
