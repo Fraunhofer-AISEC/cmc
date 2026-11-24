@@ -37,11 +37,11 @@ type MetadataInfo struct {
 	Version string `json:"version"`
 	Signer  string `json:"signer"`
 	Created string `json:"created"`
+	Format  string `json:"format"`
 }
 
 type MetadataFull struct {
 	Info   MetadataInfo
-	Format string
 	Raw    []byte
 	parsed *ar.Metadata
 }
@@ -71,7 +71,7 @@ func ResolveMetadataType(kind string) (string, bool) {
 	return "", false
 }
 
-func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataFull, error) {
+func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
 	// detect the serialization of the data
 	serializer, err := ar.DetectSerialization(raw)
 	if err != nil {
@@ -79,41 +79,32 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataFull, error) {
 	}
 	log.Tracef("Detected %v serialization", serializer.String())
 
-	// check if ca's were provided and use them to verify the payload (otherwise just assume it to be valid)
-	var payload []byte
-	signer := ""
-	if len(cas) > 0 {
-		if res, data, ok := serializer.Verify(raw, cas); !ok {
-			// collect all relevant error information
-			results, parts := []ar.Result{res.Summary}, make([]string, 0)
-			for _, sig := range res.SignatureCheck {
-				results = append(results, sig.CertChainCheck, sig.SignCheck)
-			}
+	// verify the payload against the trusted certificates
+	res, payload, ok := serializer.Verify(raw, cas)
+	if !ok {
+		// collect all relevant error information
+		results, parts := []ar.Result{res.Summary}, make([]string, 0)
+		for _, sig := range res.SignatureCheck {
+			results = append(results, sig.CertChainCheck, sig.SignCheck)
+		}
 
-			// concat all error codes and details into an error description
-			for _, r := range results {
-				for _, code := range r.ErrorCodes {
-					parts = append(parts, code.String())
-				}
-				if r.Details != "" {
-					parts = append(parts, r.Details)
-				}
+		// concat all error codes and details into an error description
+		for _, r := range results {
+			for _, code := range r.ErrorCodes {
+				parts = append(parts, code.String())
 			}
-			if len(parts) == 0 {
-				parts = append(parts, "unknown error")
-			}
-			return nil, fmt.Errorf("failed to verify signature: %v", strings.Join(parts, ", "))
-		} else {
-			payload = data
-			if signer, err = ExtractSigner(&res); err != nil {
-				return nil, fmt.Errorf("failed to extract signer: %w", err)
+			if r.Details != "" {
+				parts = append(parts, r.Details)
 			}
 		}
-	} else {
-		payload, err = serializer.GetPayload(raw)
-		if err != nil {
-			return nil, fmt.Errorf("failed to extract payload: %w", err)
+		if len(parts) == 0 {
+			parts = append(parts, "unknown error")
 		}
+		return nil, fmt.Errorf("failed to verify signature: %v", strings.Join(parts, ", "))
+	}
+	signer, err := ExtractSigner(&res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract signer: %w", err)
 	}
 
 	// unpack the metadata structure using the corresponding serializer
@@ -142,20 +133,16 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataFull, error) {
 
 	// assemble the new parsed metadata structure (leave creation time empty, will be populated by
 	// caller, the signer is only known if signatures have been verified otherwise leave it empty)
-	entry := &MetadataFull{
-		Info: MetadataInfo{
-			Id:      id,
-			Type:    meta.Type,
-			Name:    meta.Name,
-			Version: meta.Version,
-			Signer:  signer,
-			Created: "",
-		},
-		Format: strings.ToLower(serializer.String()),
-		Raw:    raw,
-		parsed: meta,
+	entry := &MetadataInfo{
+		Id:      id,
+		Type:    meta.Type,
+		Name:    meta.Name,
+		Version: meta.Version,
+		Signer:  signer,
+		Created: "",
+		Format:  strings.ToLower(serializer.String()),
 	}
-	log.Debugf("Parsed %v %v (id %v; version %v; signer %v)", entry.Info.Type, entry.Info.Name, entry.Info.Id, entry.Info.Version, entry.Info.Signer)
+	log.Debugf("Parsed %v %v (id %v; version %v; signer %v)", entry.Type, entry.Name, entry.Id, entry.Version, entry.Signer)
 	return entry, nil
 }
 func ExtractSigner(res *ar.MetadataResult) (string, error) {
@@ -178,24 +165,35 @@ func ExtractSigner(res *ar.MetadataResult) (string, error) {
 	digest := sha256.Sum256(block.Bytes)
 	return hex.EncodeToString(digest[:]), nil
 }
-func LoadMetadata(entry *store.EntryInfo, raw []byte) (*MetadataFull, error) {
+func UnpackMetadata(entry *store.EntryInfo, raw []byte) (*MetadataFull, error) {
 	// parse and unpack the stored metadata
 	if entry == nil {
 		return nil, nil
 	}
-	full, err := ParseMetadata(raw, nil)
+
+	// detect the serialization of the data
+	serializer, err := ar.DetectSerialization(raw)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse stored metadata (id %v): %w", entry.Id, err)
+		return nil, fmt.Errorf("failed to detect serialization: %w", err)
+	}
+	log.Tracef("Detected %v serialization", serializer.String())
+
+	// unpack the metadata structure using the corresponding serializer
+	payload, err := serializer.GetPayload(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract payload: %w", err)
+	}
+	meta := &ar.Metadata{}
+	if err := serializer.Unmarshal(payload, meta); err != nil {
+		return nil, fmt.Errorf("failed to unpack metadata: %w", err)
 	}
 
-	// validate the consistency of the parsed data
-	if full.Info.Id != entry.Id || full.Info.Type != entry.Type || full.Info.Name != entry.Name || full.Info.Version != entry.Version {
-		return nil, fmt.Errorf("stored metadata (id %v) is inconsistent with its raw data (id %v | %v %v %v)",
-			entry.Id, full.Info.Id, full.Info.Type, full.Info.Name, full.Info.Version)
-	}
-	full.Info.Signer = entry.Signer
-	full.Info.Created = entry.Created
-	return full, nil
+	// return the unpacked full information (no need to validate the state or consistency as the data come from a trusted state)
+	return &MetadataFull{
+		Info:   LoadMetadataInfo(entry),
+		Raw:    raw,
+		parsed: meta,
+	}, nil
 }
 func LoadMetadataInfo(entry *store.EntryInfo) MetadataInfo {
 	return MetadataInfo{
@@ -205,22 +203,23 @@ func LoadMetadataInfo(entry *store.EntryInfo) MetadataInfo {
 		Version: entry.Version,
 		Signer:  entry.Signer,
 		Created: entry.Created,
+		Format:  entry.Format,
 	}
 }
-func StoreMetadata(entry *MetadataFull) (*store.EntryInfo, error) {
-	versionTime, err := time.Parse(time.RFC3339, entry.Info.Version)
+func StoreMetadata(entry *MetadataInfo) (*store.EntryInfo, error) {
+	versionTime, err := time.Parse(time.RFC3339, entry.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse version time: %w", err)
 	}
 	return &store.EntryInfo{
-		Id:          entry.Info.Id,
-		Type:        entry.Info.Type,
-		Name:        entry.Info.Name,
-		Version:     entry.Info.Version,
+		Id:          entry.Id,
+		Type:        entry.Type,
+		Name:        entry.Name,
+		Version:     entry.Version,
 		VersionTime: versionTime.UnixNano(),
-		Signer:      entry.Info.Signer,
+		Signer:      entry.Signer,
 		Format:      entry.Format,
-		Created:     entry.Info.Created,
+		Created:     entry.Created,
 	}, nil
 }
 

@@ -48,26 +48,31 @@ const (
 func RunServer(ctx context.Context, index store.Index, blobs store.BlobStore, metadataCAs []*x509.Certificate, addr string, tlsKey crypto.PrivateKey, tlsCaChain []*x509.Certificate) error {
 	s := &Server{index: index, blobs: blobs, metadataCAs: metadataCAs}
 
+	// the service is only provided via tls, and only verified metadata is accepted
+	if tlsKey == nil || len(tlsCaChain) == 0 {
+		return errors.New("tls key and certificate chain are required")
+	}
+	if len(metadataCAs) == 0 {
+		return errors.New("trusted metadata certificates are required")
+	}
+
 	// configure the tls parameter
 	var tlsUnpackedChain [][]byte
 	for _, c := range tlsCaChain {
 		tlsUnpackedChain = append(tlsUnpackedChain, c.Raw)
 	}
-	var tlsCfg *tls.Config
-	if tlsKey != nil {
-		tlsCfg = &tls.Config{
-			MinVersion:       tls.VersionTLS12,
-			CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
-			ClientAuth:       tls.NoClientCert,
-			ClientCAs:        nil,
-			Certificates: []tls.Certificate{
-				{
-					Certificate: tlsUnpackedChain,
-					PrivateKey:  tlsKey,
-					Leaf:        tlsCaChain[0],
-				},
+	tlsCfg := &tls.Config{
+		MinVersion:       tls.VersionTLS12,
+		CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+		ClientAuth:       tls.NoClientCert,
+		ClientCAs:        nil,
+		Certificates: []tls.Certificate{
+			{
+				Certificate: tlsUnpackedChain,
+				PrivateKey:  tlsKey,
+				Leaf:        tlsCaChain[0],
 			},
-		}
+		},
 	}
 
 	// try to create the http server and start it
@@ -80,9 +85,9 @@ func RunServer(ctx context.Context, index store.Index, blobs store.BlobStore, me
 		IdleTimeout:  serverTimeout,
 	}
 
-	log.Infof("Starting server on (%v)", httpServer.Addr)
+	log.Infof("Starting HTTPS server on (%v)", httpServer.Addr)
 	errs := make(chan error, 1)
-	go func() { errs <- httpServer.ListenAndServe() }()
+	go func() { errs <- httpServer.ListenAndServeTLS("", "") }()
 
 	// wait for the server to fail or the context to be cancelled
 	select {
@@ -151,13 +156,13 @@ func handleSendEntry(resp http.ResponseWriter, what string, entry *MetadataFull)
 
 	// setup the content type to match the raw format
 	contentType := "application/octet-stream"
-	switch entry.Format {
+	switch entry.Info.Format {
 	case "json":
 		contentType = "application/json"
 	case "cbor":
 		contentType = "application/cbor"
 	default:
-		log.Debugf("Unknown format encountered: %v", entry.Format)
+		log.Debugf("Unknown format encountered: %v", entry.Info.Format)
 	}
 
 	// send the actual raw metadata
@@ -267,7 +272,7 @@ func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
 	}
 
 	// convert the parsed entry to its index representation
-	entry.Info.Created = time.Now().UTC().Format(time.RFC3339)
+	entry.Created = time.Now().UTC().Format(time.RFC3339)
 	indexEntry, err := StoreMetadata(entry)
 	if err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to convert metadata: %v", err))
@@ -275,7 +280,7 @@ func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
 	}
 
 	// write the blob first, as blob without index is harmless, but an index must point at a valid blob
-	if err := s.blobs.Put(req.Context(), entry.Info.Id, entry.Raw); err != nil {
+	if err := s.blobs.Put(req.Context(), entry.Id, body); err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to store metadata blob: %v", err))
 		return
 	}
@@ -287,7 +292,7 @@ func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
 
 	// check if the data could not be inserted as they are already in the index
 	if !inserted {
-		msg := fmt.Sprintf("Metadata %v %v with id %v already exist", entry.Info.Type, entry.Info.Name, entry.Info.Id)
+		msg := fmt.Sprintf("Metadata %v %v with id %v already exist", entry.Type, entry.Name, entry.Id)
 		log.Debug(msg)
 
 		resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -297,15 +302,15 @@ func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
 	}
 
 	// return the successful insertion
-	log.Infof("Inserted %v %v version %v (id %v) into the index", entry.Info.Type, entry.Info.Name, entry.Info.Version, entry.Info.Id)
-	resp.Header().Set("X-Metadata-Id", entry.Info.Id)
-	resp.Header().Set("X-Metadata-Name", entry.Info.Name)
-	resp.Header().Set("X-Metadata-Type", entry.Info.Type)
-	resp.Header().Set("X-Metadata-Version", entry.Info.Version)
-	resp.Header().Set("X-Metadata-Signer", entry.Info.Signer)
+	log.Infof("Inserted %v %v version %v (id %v) into the index", entry.Type, entry.Name, entry.Version, entry.Id)
+	resp.Header().Set("X-Metadata-Id", entry.Id)
+	resp.Header().Set("X-Metadata-Name", entry.Name)
+	resp.Header().Set("X-Metadata-Type", entry.Type)
+	resp.Header().Set("X-Metadata-Version", entry.Version)
+	resp.Header().Set("X-Metadata-Signer", entry.Signer)
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
-	fmt.Fprintf(resp, "Metadata %v (id: %v) inserted", entry.Info.Name, entry.Info.Id)
+	fmt.Fprintf(resp, "Metadata %v (id: %v) inserted", entry.Name, entry.Id)
 }
 func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 	log.Trace("Querying metadata")
@@ -495,5 +500,5 @@ func (s *Server) unpackEntry(ctx context.Context, info *store.EntryInfo) (*Metad
 	if raw == nil {
 		return nil, fmt.Errorf("metadata blob (id %v) is referenced by the index but missing in the blob store", info.Id)
 	}
-	return LoadMetadata(info, raw)
+	return UnpackMetadata(info, raw)
 }

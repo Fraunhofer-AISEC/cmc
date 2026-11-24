@@ -18,148 +18,93 @@ package main
 import (
 	"crypto"
 	"crypto/x509"
-	"encoding/pem"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
-	log "github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v3"
-	"golang.org/x/exp/maps"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config"
+	"github.com/Fraunhofer-AISEC/cmc/internal/config/sections"
 )
 
-type config struct {
-	DbPath      string
-	BlobPath    string
-	Address     string
-	LogLevel    string
-	MetadataCAs []*x509.Certificate
+type httpConfig struct {
+	Address    string   `toml:"address"      flag:"addr"         default:"localhost:8081" usage:"HTTPS listen address"`
+	TlsKey     string   `toml:"tls_key"      flag:"tls-key"      default:"{data}/tls-key.pem" path:"true" usage:"TLS key for the RVPS HTTPS server"`
+	TlsCaChain []string `toml:"tls_ca_chain" flag:"tls-ca-chain" default:"{data}/tls-chain.pem" path:"true" usage:"comma-separated paths to TLS certificate chain for the RVPS HTTPS server"`
+}
+
+// Validate requires the TLS key and certificate chain, as there is no plain HTTP mode
+func (h *httpConfig) Validate(r *config.Report) {
+	if h.TlsKey == "" {
+		r.Missing("tls_key", "tls-key")
+	}
+	if len(h.TlsCaChain) == 0 {
+		r.Missing("tls_ca_chain", "tls-ca-chain")
+	}
+}
+
+type trustConfig struct {
+	RootCas []string `toml:"root_cas" flag:"root-cas" default:"{data}/ca.pem" path:"true" usage:"comma-separated paths to trusted metadata root CA certificates (PEM or DER). All certificates of all files are trusted individually, they do not have to form a chain"`
+}
+
+// Validate requires the metadata CAs, as metadata is never stored unverified
+func (t *trustConfig) Validate(r *config.Report) {
+	if len(t.RootCas) == 0 {
+		r.Missing("root_cas", "root-cas")
+	}
+}
+
+type storageConfig struct {
+	Db    string `toml:"db"    flag:"db"    default:"{data}/rvps.db" path:"true" usage:"SQLite3 index database path, contents are considered trusted"`
+	Blobs string `toml:"blobs" flag:"blobs" default:"{data}/blobs"   path:"true" usage:"directory of the metadata blob store, contents are considered trusted"`
+}
+
+// Validate requires both stores, as there is no mode of operation without them
+func (s *storageConfig) Validate(r *config.Report) {
+	if s.Db == "" {
+		r.Missing("db", "db")
+	}
+	if s.Blobs == "" {
+		r.Missing("blobs", "blobs")
+	}
+}
+
+type Config struct {
+	Log     sections.Log  `toml:"log"`
+	Http    httpConfig    `toml:"http" category:"HTTP"`
+	Trust   trustConfig   `toml:"trust"`
+	Storage storageConfig `toml:"storage"`
+
+	// Values derived from the configuration above by resolve
+	metadataCas []*x509.Certificate
 	tlsKey      crypto.PrivateKey
 	tlsCaChain  []*x509.Certificate
 }
 
-const (
-	flagDbPath     = "db"
-	flagBlobPath   = "blobs"
-	flagAddress    = "addr"
-	flagMetadataCA = "ca"
-	flagLogLevel   = "log"
-	flagTLSKey     = "tls-key"
-	flagTLSCaChain = "tls-ca-chain"
-)
+// resolve loads the keys and certificates the validated configuration points to.
+// Unlike loading and validating, this touches the file system.
+func (c *Config) resolve() error {
 
-var (
-	logLevels = map[string]log.Level{
-		"panic": log.PanicLevel,
-		"fatal": log.FatalLevel,
-		"error": log.ErrorLevel,
-		"warn":  log.WarnLevel,
-		"info":  log.InfoLevel,
-		"debug": log.DebugLevel,
-		"trace": log.TraceLevel,
+	var err error
+
+	// Every certificate of every file is loaded as an individual trust anchor
+	c.metadataCas, err = internal.ReadCerts(c.Trust.RootCas)
+	if err != nil {
+		return fmt.Errorf("trust.root_cas: failed to load metadata root CAs: %w", err)
+	}
+	for _, ca := range c.metadataCas {
+		log.Infof("Trusting metadata CA %v", ca.Subject)
 	}
 
-	flags = []cli.Flag{
-		&cli.StringFlag{
-			Name:     flagDbPath,
-			Usage:    "SQLite3 index database path, contents are considered trusted",
-			Required: true,
-		},
-		&cli.StringFlag{
-			Name:     flagBlobPath,
-			Usage:    "directory of the metadata blob store, contents are considered trusted",
-			Required: true,
-		},
-		&cli.StringFlag{
-			Name:     flagAddress,
-			Usage:    "HTTP listen address",
-			Required: true,
-		},
-		&cli.StringSliceFlag{
-			Name:     flagMetadataCA,
-			Usage:    "trusted metadata root CA certificates (PEM or DER), none means pushed metadata is stored unverified",
-			Required: true,
-		},
-		&cli.StringFlag{
-			Name:  flagLogLevel,
-			Usage: fmt.Sprintf("logging level: %v", strings.Join(maps.Keys(logLevels), ",")),
-			Value: "info",
-		},
-		&cli.StringFlag{
-			Name:  flagTLSKey,
-			Usage: "TLS key for RVPS HTTPS server (no key and chain implies plain HTTP)",
-		},
-		&cli.StringFlag{
-			Name:  flagTLSCaChain,
-			Usage: "comma-separated paths to TLS certificate chain for RVPS HTTPS server (no key and chain implies plain HTTP)",
-		},
-	}
-)
-
-func fetchConfig(cmd *cli.Command) (*config, error) {
-	cfg := &config{}
-
-	// configure the logging class (first to ensure it applies to upcoming logs)
-	level, ok := logLevels[strings.ToLower(cmd.String(flagLogLevel))]
-	if !ok {
-		return nil, fmt.Errorf("log level [%v] does not exist", cmd.String(flagLogLevel))
-	}
-	log.SetLevel(level)
-
-	// parse and validate the db path, blob path and listen address (presence enforced by cli)
-	if path, err := filepath.Abs(cmd.String(flagDbPath)); err != nil {
-		return nil, fmt.Errorf("failed to resolve database path: %w", err)
-	} else {
-		cfg.DbPath = path
-	}
-	if path, err := filepath.Abs(cmd.String(flagBlobPath)); err != nil {
-		return nil, fmt.Errorf("failed to resolve blob store path: %w", err)
-	} else {
-		cfg.BlobPath = path
-	}
-	cfg.Address = cmd.String(flagAddress)
-
-	// parse and validate the root cas
-	if args := cmd.StringSlice(flagMetadataCA); len(args) > 0 {
-		cfg.MetadataCAs = make([]*x509.Certificate, 0, len(args))
-
-		for _, path := range args {
-			data, err := os.ReadFile(path)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read ca (%v): %w", path, err)
-			}
-
-			// try to decode and parse the actual certificate
-			block, _ := pem.Decode(data)
-			if block != nil {
-				data = block.Bytes
-			}
-			cert, err := x509.ParseCertificate(data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse x509 certificate (%v): %w", path, err)
-			}
-			cfg.MetadataCAs = append(cfg.MetadataCAs, cert)
-
-			log.Infof("Metadata CA certificate (%v) loaded", path)
-		}
-	} else {
-		log.Info("Running without metadata signature verification")
+	c.tlsKey, err = internal.LoadPrivateKey(c.Http.TlsKey)
+	if err != nil {
+		return fmt.Errorf("http.tls_key: failed to load TLS key: %w", err)
 	}
 
-	// parse the tls parameter
-	if cmd.IsSet(flagTLSKey) || cmd.IsSet(flagTLSCaChain) {
-		var err error
-		cfg.tlsKey, err = internal.LoadPrivateKey(cmd.String(flagTLSKey))
-		if err != nil {
-			return nil, fmt.Errorf("failed to load private key: %w", err)
-		}
-
-		cfg.tlsCaChain, err = internal.ReadCerts(strings.Split(cmd.String(flagTLSCaChain), ","))
-		if err != nil {
-			return nil, fmt.Errorf("failed to load certificate chain: %w", err)
-		}
+	c.tlsCaChain, err = internal.ReadCerts(c.Http.TlsCaChain)
+	if err != nil {
+		return fmt.Errorf("http.tls_ca_chain: failed to load TLS certificate chain: %w", err)
 	}
-	return cfg, nil
+
+	return nil
 }
