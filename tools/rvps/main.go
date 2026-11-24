@@ -17,8 +17,11 @@ package main
 
 import (
 	"context"
+	"maps"
 	"os"
 	"os/signal"
+	"slices"
+	"strings"
 	"syscall"
 
 	log "github.com/sirupsen/logrus"
@@ -26,9 +29,20 @@ import (
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/Fraunhofer-AISEC/cmc/internal/config"
-	"github.com/Fraunhofer-AISEC/cmc/rvps/store/fs"
-	"github.com/Fraunhofer-AISEC/cmc/rvps/store/sqlite"
+	"github.com/Fraunhofer-AISEC/cmc/rvps/server"
+	"github.com/Fraunhofer-AISEC/cmc/rvps/store"
 )
+
+// indexes and blobStores hold the store implementations compiled into the binary, keyed
+// by the name they are selected with. They are registered by the build-tagged files
+var (
+	indexes    = map[string]func(path string) (store.Index, error){}
+	blobStores = map[string]func(path string) (store.BlobStore, error){}
+)
+
+func available[T any](stores map[string]T) string {
+	return strings.Join(slices.Sorted(maps.Keys(stores)), ", ")
+}
 
 // binaryName selects the config file and data folder of the binary
 const binaryName = "rvps"
@@ -75,18 +89,22 @@ func serve(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// Create or open the index and the blob store
-	index, err := sqlite.NewSQLiteIndex(c.Storage.Db)
+	// Create or open the index and the blob store (both index and blob store are guaranteed by config to exist)
+	index, err := indexes[c.Storage.Index](c.Storage.Db)
 	if err != nil {
 		return err
 	}
 	defer index.Close()
-	blobs, err := fs.NewFileSystemStore(c.Storage.Blobs)
+	blobs, err := blobStores[c.Storage.BlobStore](c.Storage.Blobs)
 	if err != nil {
 		return err
 	}
 	defer blobs.Close()
 
 	// Run the server until the context is cancelled
-	return RunServer(ctx, index, blobs, c.metadataCas, c.Http.Address, c.tlsKey, c.tlsCaChain)
+	srv, err := server.New(index, blobs, c.metadataCas)
+	if err != nil {
+		return err
+	}
+	return srv.Serve(ctx, c.Http.Address, c.tlsKey, c.tlsCaChain)
 }

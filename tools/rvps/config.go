@@ -55,12 +55,21 @@ func (t *trustConfig) Validate(r *config.Report) {
 }
 
 type storageConfig struct {
-	Db    string `toml:"db"    flag:"db"    default:"{data}/rvps.db" path:"true" usage:"SQLite3 index database path, contents are considered trusted"`
-	Blobs string `toml:"blobs" flag:"blobs" default:"{data}/blobs"   path:"true" usage:"directory of the metadata blob store, contents are considered trusted"`
+	Index     string `toml:"index"      flag:"index"      default:"sqlite" usage:"index implementation storing the metadata information"`
+	Db        string `toml:"db"         flag:"db"         default:"{data}/rvps.db" path:"true" usage:"SQLite3 index database path, contents are considered trusted"`
+	BlobStore string `toml:"blob_store" flag:"blob-store" default:"fs" usage:"blob store implementation storing the metadata blobs"`
+	Blobs     string `toml:"blobs"      flag:"blobs"      default:"{data}/blobs"   path:"true" usage:"directory of the metadata blob store, contents are considered trusted"`
 }
 
-// Validate requires both stores, as there is no mode of operation without them
+// Validate requires both stores, as there is no mode of operation without
+// them, and that the selected implementations are compiled into the binary
 func (s *storageConfig) Validate(r *config.Report) {
+	if indexes[s.Index] == nil {
+		r.Errorf("index", "index %q is not implemented, available: %v", s.Index, available(indexes))
+	}
+	if blobStores[s.BlobStore] == nil {
+		r.Errorf("blob_store", "blob store %q is not implemented, available: %v", s.BlobStore, available(blobStores))
+	}
 	if s.Db == "" {
 		r.Missing("db", "db")
 	}

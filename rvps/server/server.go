@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package server
 
 import (
 	"context"
@@ -38,6 +38,7 @@ type Server struct {
 	index       store.Index
 	blobs       store.BlobStore
 	metadataCAs []*x509.Certificate
+	mux         *http.ServeMux
 }
 
 const (
@@ -45,15 +46,38 @@ const (
 	serverTimeout = 60 * time.Second
 )
 
-func RunServer(ctx context.Context, index store.Index, blobs store.BlobStore, metadataCAs []*x509.Certificate, addr string, tlsKey crypto.PrivateKey, tlsCaChain []*x509.Certificate) error {
-	s := &Server{index: index, blobs: blobs, metadataCAs: metadataCAs}
-
-	// the service is only provided via tls, and only verified metadata is accepted
-	if tlsKey == nil || len(tlsCaChain) == 0 {
-		return errors.New("tls key and certificate chain are required")
+// Create a new RVPS server operating on the given index and blob store
+// (CAs must be provided and only uploads signed by them are trusted)
+func New(index store.Index, blobs store.BlobStore, metadataCAs []*x509.Certificate) (*Server, error) {
+	if index == nil || blobs == nil {
+		return nil, errors.New("index and blob store are required")
 	}
 	if len(metadataCAs) == 0 {
-		return errors.New("trusted metadata certificates are required")
+		return nil, errors.New("trusted metadata certificates are required")
+	}
+
+	s := &Server{index: index, blobs: blobs, metadataCAs: metadataCAs, mux: http.NewServeMux()}
+
+	// setup the router (fixed paths take precedence over the [/<type or alias>/<name>] paths used to fetch metadata by name)
+	s.mux.HandleFunc("GET /list", s.handleEnumerate)
+	s.mux.HandleFunc("POST /metadata", s.handleUpload)
+	s.mux.HandleFunc("POST /query", s.handleQuery)
+	s.mux.HandleFunc("GET /metadata/{id}", s.handleFetchId)
+	s.mux.HandleFunc("GET /{kind}/{name}", s.handleFetchName)
+	s.mux.HandleFunc("/", handleNotFound)
+	return s, nil
+}
+
+// Handler returns the HTTP handler serving the RVPS API
+func (s *Server) Handler() http.Handler {
+	return s.mux
+}
+
+// Serve provides the RVPS API via HTTPS on addr until the context is cancelled
+func (s *Server) Serve(ctx context.Context, addr string, tlsKey crypto.PrivateKey, tlsCaChain []*x509.Certificate) error {
+	// the service is only provided via tls
+	if tlsKey == nil || len(tlsCaChain) == 0 {
+		return errors.New("tls key and certificate chain are required")
 	}
 
 	// configure the tls parameter
@@ -78,7 +102,7 @@ func RunServer(ctx context.Context, index store.Index, blobs store.BlobStore, me
 	// try to create the http server and start it
 	httpServer := http.Server{
 		Addr:         addr,
-		Handler:      http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) { s.handleDispatch(req, resp) }),
+		Handler:      s.Handler(),
 		TLSConfig:    tlsCfg,
 		ReadTimeout:  serverTimeout,
 		WriteTimeout: serverTimeout,
@@ -104,30 +128,10 @@ func RunServer(ctx context.Context, index store.Index, blobs store.BlobStore, me
 	}
 }
 
-func (s *Server) handleDispatch(req *http.Request, resp http.ResponseWriter) {
-	// parse paths of the form [/<type or alias>/<name>] used to fetch metadata by name
-	name, kind, kindOk := "", "", false
-	if splitPath := strings.Split(req.URL.Path, "/")[1:]; len(splitPath) == 2 {
-		kind, kindOk = ResolveMetadataType(splitPath[0])
-		name = splitPath[1]
-	}
-
-	// dispatch by method and path (hard known paths take precedence over type/alias paths)
-	switch {
-	case req.Method == "GET" && req.URL.Path == "/list":
-		s.handleEnumerate(req, resp)
-	case req.Method == "POST" && req.URL.Path == "/metadata":
-		s.handleUpload(req, resp)
-	case req.Method == "POST" && req.URL.Path == "/query":
-		s.handleQuery(req, resp)
-	case req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/metadata/"):
-		s.handleFetchId(req, resp, strings.TrimPrefix(req.URL.Path, "/metadata/"))
-	case req.Method == "GET" && kindOk:
-		s.handleFetchName(req, resp, kind, name)
-	default:
-		resp.WriteHeader(http.StatusNotFound)
-		fmt.Fprintf(resp, "Resource [%v] not found", req.URL.Path)
-	}
+func handleNotFound(resp http.ResponseWriter, req *http.Request) {
+	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	resp.WriteHeader(http.StatusNotFound)
+	fmt.Fprintf(resp, "Resource [%v] not found", req.URL.Path)
 }
 func handleInternalError(resp http.ResponseWriter, err string) {
 	log.Warnf("Internal error: %v", err)
@@ -202,7 +206,7 @@ func handleReadUpload(req *http.Request, resp http.ResponseWriter, contentType s
 	fmt.Fprintf(resp, "Body exceeds the maximum size of %v bytes", maxUploadSize)
 	return nil
 }
-func (s *Server) handleEnumerate(req *http.Request, resp http.ResponseWriter) {
+func (s *Server) handleEnumerate(resp http.ResponseWriter, req *http.Request) {
 	query := req.URL.Query()
 	kind, name, signer := query.Get("type"), query.Get("name"), strings.ToLower(query.Get("signer"))
 	log.Tracef("Enumeration for [type: %v] [name: %v] [signer: %v] [offset: %v]", kind, name, signer, query.Get("offset"))
@@ -251,7 +255,7 @@ func (s *Server) handleEnumerate(req *http.Request, resp http.ResponseWriter) {
 	resp.WriteHeader(http.StatusOK)
 	json.NewEncoder(resp).Encode(infos)
 }
-func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
+func (s *Server) handleUpload(resp http.ResponseWriter, req *http.Request) {
 	log.Tracef("Uploading metadata")
 
 	// read the request body (unknown content type) and ensure its not empty
@@ -312,7 +316,7 @@ func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
 	resp.WriteHeader(http.StatusOK)
 	fmt.Fprintf(resp, "Metadata %v (id: %v) inserted", entry.Name, entry.Id)
 }
-func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
+func (s *Server) handleQuery(resp http.ResponseWriter, req *http.Request) {
 	log.Trace("Querying metadata")
 
 	// read the request body and parse it
@@ -423,7 +427,8 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 	resp.WriteHeader(http.StatusOK)
 	json.NewEncoder(resp).Encode(queryResponse)
 }
-func (s *Server) handleFetchId(req *http.Request, resp http.ResponseWriter, id string) {
+func (s *Server) handleFetchId(resp http.ResponseWriter, req *http.Request) {
+	id := req.PathValue("id")
 	log.Tracef("Fetching metadata for [id: %v]", id)
 
 	// validate the id formatting
@@ -442,8 +447,15 @@ func (s *Server) handleFetchId(req *http.Request, resp http.ResponseWriter, id s
 	// send the entry (will automatically account for not-found)
 	handleSendEntry(resp, fmt.Sprintf("id (%v)", id), entry)
 }
-func (s *Server) handleFetchName(req *http.Request, resp http.ResponseWriter, kind, name string) {
-	query := req.URL.Query()
+func (s *Server) handleFetchName(resp http.ResponseWriter, req *http.Request) {
+	query, name := req.URL.Query(), req.PathValue("name")
+
+	// only the metadata types and their aliases are valid as first path element
+	kind, ok := ResolveMetadataType(req.PathValue("kind"))
+	if !ok {
+		handleNotFound(resp, req)
+		return
+	}
 	log.Tracef("Fetching metadata for [name: %v] [type: %v] [signer: %v]", name, kind, query.Get("signer"))
 	var signer *string
 
