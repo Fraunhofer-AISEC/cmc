@@ -35,7 +35,7 @@ func VerifySw(
 	collateral ar.Collateral,
 	nonce []byte,
 	refComponents []ar.Component,
-) (*ar.MeasurementResult, bool) {
+) *ar.MeasurementResult {
 
 	log.Debug("Verifying SW measurements")
 
@@ -47,14 +47,14 @@ func VerifySw(
 	// Alternative reference values are not supported for SW measurements
 	if err := checkNoAlternatives(refComponents); err != nil {
 		result.Summary.Fail(ar.RefValAltUnsupported, err)
-		return result, false
+		return result
 	}
 
 	// SW Evidence is always JSON serialized, as OCI specs are JSON
 	s, err := ar.NewJsonSerializer()
 	if err != nil {
 		result.Summary.Fail(ar.Internal, err)
-		return result, false
+		return result
 	}
 
 	// Verify signature against the public key from the collateral. The collateral is
@@ -63,7 +63,7 @@ func VerifySw(
 	pub, err := internal.ParsePublicKey(collateral.Key)
 	if err != nil {
 		result.Summary.Fail(ar.VerifyEvidence, err)
-		return result, false
+		return result
 	}
 	payload, sigs, sigResult := s.Verify(evidence.Data, pub)
 	if len(sigs) > 0 {
@@ -72,7 +72,7 @@ func VerifySw(
 	if sigResult.Status != ar.StatusSuccess {
 		log.Warnf("Failed to verify sw evidence")
 		result.Summary.Fail(ar.VerifyEvidence)
-		return result, false
+		return result
 	}
 	log.Debug("Successfully verified SW measurement signature")
 
@@ -82,7 +82,7 @@ func VerifySw(
 	if err != nil {
 		log.Warnf("Failed to unmarshal sw swEvidence")
 		result.Summary.Fail(ar.ParseEvidence)
-		return result, false
+		return result
 	}
 
 	// Verify nonce
@@ -103,14 +103,13 @@ func VerifySw(
 					log.Tracef("Found matching rootfs hash %x", ref.GetHash(crypto.SHA256))
 
 					// Calculate the measurement template hash
-					templateHash, ok, err := ValidateTemplateHash(s, &ref, event.CtrData)
+					templateHash, validateOk, err := ValidateTemplateHash(s, &ref, event.CtrData)
 					if err != nil {
 						log.Errorf("Internal error: calculate template hash: %v", err)
 						result.Summary.Fail(ar.Internal)
-						ok = false
 						continue
 					}
-					if !ok {
+					if !validateOk {
 						log.Warnf("Rootfs matches but config validation failed. Continue search")
 						continue
 					}
@@ -227,11 +226,11 @@ func VerifySw(
 		log.Debugf("Aggregated SW measurement hash matches evidence hash")
 	}
 
-	result.Summary.Status = ar.StatusFromBool(ok)
+	result.Summary.Status = result.Summary.Status.Worse(ar.StatusFromBool(ok))
 
 	log.Debugf("Finished verifying SW measurements. Success: %v", ok)
 
-	return result, ok
+	return result
 }
 
 func ValidateTemplateHash(s ar.Serializer, ref *ar.Component, measured *ar.CtrData) ([]byte, bool, error) {

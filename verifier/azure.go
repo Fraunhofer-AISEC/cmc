@@ -86,7 +86,7 @@ func VerifyAzure(
 	caFingerprints []string,
 	tdxRefs, snpRefs, vtpmRefs []ar.Component,
 	s ar.Serializer,
-) ([]ar.MeasurementResult, bool) {
+) []ar.MeasurementResult {
 
 	log.Debug("Verifying Azure measurements...")
 
@@ -109,18 +109,18 @@ func VerifyAzure(
 			}
 			r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected Azure evidence type %v",
 				evidences[i].Type))
-			return []ar.MeasurementResult{r}, false
+			return []ar.MeasurementResult{r}
 		}
 	}
 	if !foundCcEvidence {
 		r := ar.MeasurementResult{}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("CC measurement missing"))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 	if !foundVtpmEvidence {
 		r := ar.MeasurementResult{}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("vTPM measurement missing"))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 
 	foundCcCollateral := false
@@ -141,25 +141,25 @@ func VerifyAzure(
 			}
 			r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected Azure collateral type %v",
 				collaterals[i].Type))
-			return []ar.MeasurementResult{r}, false
+			return []ar.MeasurementResult{r}
 		}
 	}
 	if !foundCcCollateral {
 		r := ar.MeasurementResult{}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("CC measurement missing"))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 	if !foundVtpmCollateral {
 		r := ar.MeasurementResult{}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("vTPM measurement missing"))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 	if len(vtpmCollateral.Certs) != 1 {
 		r := ar.MeasurementResult{
 			Type: vtpmCollateral.Type,
 		}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("unexpected length of vTPM certs %v", len(vtpmCollateral.Certs)))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 
 	// Parse AK cert
@@ -169,7 +169,7 @@ func VerifyAzure(
 			Type: vtpmCollateral.Type,
 		}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to parse vTPM cert: %w", err))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 
 	// Extract nonce from report to verify against vTPM AK public
@@ -179,7 +179,7 @@ func VerifyAzure(
 			Type: ccEvidence.Type,
 		}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to extract CC report nonce: %w", err))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 	log.Tracef("Extracted HW report nonce: %v", hex.EncodeToString(hwreportNonce))
 
@@ -191,48 +191,31 @@ func VerifyAzure(
 			Type: ccCollateral.Type,
 		}
 		r.Summary.Fail(ar.VerifyMeasurement, fmt.Errorf("failed to verify Azure CoT: %w", err))
-		return []ar.MeasurementResult{r}, false
+		return []ar.MeasurementResult{r}
 	}
 
 	// Create results structure and verify all measurements
-	success := true
 	results := make([]ar.MeasurementResult, 0)
 
 	// Verify TDX measurements with verified hwreport nonce
 	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_TDX {
-		tdxResult, ok := VerifyTdx(ccEvidence, ccCollateral, hwreportNonce, tdxPolicy,
-			caFingerprints, tdxRefs)
-		if !ok {
-			success = false
-		}
-		results = append(results, *tdxResult)
+		results = append(results, *VerifyTdx(ccEvidence, ccCollateral, hwreportNonce, tdxPolicy,
+			caFingerprints, tdxRefs))
 	}
 
 	// Verify SNP measurement with with verified hwreport nonce
 	if ccEvidence.Type == ar.TYPE_EVIDENCE_AZURE_SNP {
-		snpResult, ok := VerifySnp(ccEvidence, ccCollateral, hwreportNonce, snpPolicy,
-			caFingerprints, snpRefs)
-		if !ok {
-			success = false
-		}
-		results = append(results, *snpResult)
+		results = append(results, *VerifySnp(ccEvidence, ccCollateral, hwreportNonce, snpPolicy,
+			caFingerprints, snpRefs))
 	}
 
 	// Verify vTPM measurements with provided nonce
-	vtpmResult, ok := VerifyTpm(vtpmEvidence, vtpmCollateral, nonce,
-		[]*x509.Certificate{vtpmAkCert}, false, vtpmRefs, s)
-	if !ok {
-		success = false
-	}
-	results = append(results, *vtpmResult)
+	results = append(results, *VerifyTpm(vtpmEvidence, vtpmCollateral, nonce,
+		[]*x509.Certificate{vtpmAkCert}, false, vtpmRefs, s))
 
-	if success {
-		log.Debugf("Successfully verified Azure measurements")
-	} else {
-		log.Warnf("Failed to verify Azure measurements")
-	}
+	log.Debugf("Finished verifying Azure measurements")
 
-	return results, success
+	return results
 }
 
 func DecodeAzureRtData(data []byte) (*AzureRuntimeData, *AzureRuntimeClaims, error) {

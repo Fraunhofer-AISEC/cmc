@@ -50,10 +50,9 @@ func TestVerifyTpm(t *testing.T) {
 	tlsChain, tlsCa := reissueAk(t, validAk, nil)
 
 	tests := []struct {
-		name  string
-		args  args
-		want  ar.Status
-		want1 bool
+		name string
+		args args
+		want ar.Status
 	}{
 		{
 			// Measurement: Eventlog
@@ -74,8 +73,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			// Measurement: Final PCRs
@@ -96,8 +94,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			// Measurement: Final PCRs
@@ -118,8 +115,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidComponentsSummary,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			// Measurement: Eventlog
@@ -141,8 +137,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidComponentsSummary,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Summary with invalid artifacts
@@ -163,8 +158,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Summary with invalid artifacts
@@ -185,8 +179,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidComponentsSummary,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Eventlog with invalid artifacts
@@ -207,8 +200,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		// Measurement: Summary
 		// Reference Values: Eventlog with invalid reference values
@@ -229,8 +221,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		// Measurement: Summary
 		// Reference Values: Summary with invalid reference values
@@ -251,8 +242,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidReferenceComponentsSummary,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		// Measurement: Summary
 		// Reference Values: Summary with invalid duplicate reference values
@@ -273,8 +263,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidReferenceComponentsSummaryDuplicate,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		// Measurement: Eventlog
 		// Reference Values: Eventlog with invalid reference values
@@ -295,8 +284,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		// Measurement: Eventlog
 		// Reference Values: Eventlog with invalid reference values (missing trust anchor and index)
@@ -317,8 +305,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: invalidComponentsMissingProperties,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Nonce",
@@ -337,8 +324,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Signature",
@@ -357,8 +343,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid CA SubjectKeyId",
@@ -377,8 +362,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{invalidCaTpm},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Cert Chain",
@@ -397,8 +381,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{invalidCaTpm},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		// The quote authenticates the PCR selection {1,4}. The measurement artifacts must be
 		// bound to that selection.
@@ -421,8 +404,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: relabelComponents(validComponents, map[int]int{1: 8, 4: 9}),
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Eventlog for PCR1 only, while the quote selects PCR1 and PCR4
@@ -443,8 +425,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Eventlog for PCR1, PCR4 and an additional unquoted PCR8
@@ -466,8 +447,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Eventlog with a duplicate artifact for PCR1
@@ -489,8 +469,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Eventlog
@@ -513,8 +492,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: append(slices.Clone(validComponents), unquotedRequiredComponent),
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// Measurement: Eventlog
@@ -537,8 +515,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: append(slices.Clone(validComponents), unquotedOptionalComponent),
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			// Measurement: Eventlog provided in descending PCR index order. The aggregated quote
@@ -561,8 +538,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			// Measurement: Eventlog which does not recalculate to the measured value of PCR4
@@ -584,8 +560,7 @@ func TestVerifyTpm(t *testing.T) {
 				components: validComponents,
 				cas:        []*x509.Certificate{validCa},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// TPM as primary trust anchor with an AK certificate carrying tcg-kp-AIKCertificate
@@ -606,8 +581,7 @@ func TestVerifyTpm(t *testing.T) {
 				cas:          []*x509.Certificate{ekuCa},
 				requireAkEku: true,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			// TPM as primary trust anchor with an AK certificate without EKU
@@ -628,8 +602,7 @@ func TestVerifyTpm(t *testing.T) {
 				cas:          []*x509.Certificate{validCa},
 				requireAkEku: true,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			// TPM as primary trust anchor with a TLS certificate of the same CA as quote signer
@@ -650,8 +623,7 @@ func TestVerifyTpm(t *testing.T) {
 				cas:          []*x509.Certificate{tlsCa},
 				requireAkEku: true,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 	}
 
@@ -659,13 +631,10 @@ func TestVerifyTpm(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := VerifyTpm(tt.args.evidence, tt.args.collateral, tt.args.nonce,
+			got := VerifyTpm(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.cas, tt.args.requireAkEku, tt.args.components, tt.args.s)
 			if got.Summary.Status != tt.want {
-				t.Errorf("verifyTpm() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want1)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("verifyTpm() --GOT1-- = %v, --WANT1-- %v", got1, tt.want1)
+				t.Errorf("verifyTpm() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want)
 			}
 		})
 	}

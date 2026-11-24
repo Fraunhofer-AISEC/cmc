@@ -17,7 +17,6 @@ package verifier
 
 import (
 	"encoding/hex"
-	"reflect"
 	"testing"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
@@ -156,14 +155,10 @@ func TestVerifyIas(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, got := VerifyIas(tt.args.evidence, tt.args.collateral, tt.args.nonce,
+			r := VerifyIas(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.caFingerprints, tt.args.components)
-			if got != tt.want {
-				t.Errorf("verifyIas() error = %v, wantErr %v", got, tt.want)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("verifyIas() = %v, want %v", got, tt.want)
+			if got := r.Summary.Status == ar.StatusSuccess; got != tt.want {
+				t.Errorf("verifyIas() = %v, want %v", r.Summary.Status, tt.want)
 			}
 		})
 	}

@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -261,67 +260,37 @@ Loop:
 
 		case ar.TYPE_EVIDENCE_TPM:
 			tpmCas, requireAkEku := tpmAkTrust(report.Evidences, col, metadataCas)
-			r, ok := VerifyTpm(ev, col, evidenceNonce, tpmCas, requireAkEku,
-				refVals[ar.TRUST_ANCHOR_TPM], s)
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("TPM measurement"))
-			}
-			result.Measurements = append(result.Measurements, *r)
+			addMeasurements(result, "TPM", *VerifyTpm(ev, col, evidenceNonce, tpmCas, requireAkEku,
+				refVals[ar.TRUST_ANCHOR_TPM], s))
 
 		case ar.TYPE_EVIDENCE_SNP:
-			r, ok := VerifySnp(ev, col, evidenceNonce, root.SnpPolicy, root.CaFingerprints,
-				refVals[ar.TRUST_ANCHOR_SNP])
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("SNP measurement"))
-			}
-			result.Measurements = append(result.Measurements, *r)
+			addMeasurements(result, "SNP", *VerifySnp(ev, col, evidenceNonce, root.SnpPolicy,
+				root.CaFingerprints, refVals[ar.TRUST_ANCHOR_SNP]))
 
 		case ar.TYPE_EVIDENCE_TDX:
-			r, ok := VerifyTdx(ev, col, evidenceNonce, root.TdxPolicy, root.CaFingerprints,
-				refVals[ar.TRUST_ANCHOR_TDX])
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("TDX measurement"))
-			}
-			result.Measurements = append(result.Measurements, *r)
+			addMeasurements(result, "TDX", *VerifyTdx(ev, col, evidenceNonce, root.TdxPolicy,
+				root.CaFingerprints, refVals[ar.TRUST_ANCHOR_TDX]))
 
 		case ar.TYPE_EVIDENCE_SGX:
-			r, ok := VerifySgx(ev, col, evidenceNonce, root.SgxPolicy, root.CaFingerprints,
-				refVals[ar.TRUST_ANCHOR_SGX])
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("SGX measurement"))
-			}
-			result.Measurements = append(result.Measurements, *r)
+			addMeasurements(result, "SGX", *VerifySgx(ev, col, evidenceNonce, root.SgxPolicy,
+				root.CaFingerprints, refVals[ar.TRUST_ANCHOR_SGX]))
 
 		case ar.TYPE_EVIDENCE_IAS:
-			r, ok := VerifyIas(ev, col, evidenceNonce, root.CaFingerprints,
-				refVals[ar.TRUST_ANCHOR_IAS])
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("IAS measurement"))
-			}
-			result.Measurements = append(result.Measurements, *r)
+			addMeasurements(result, "IAS", *VerifyIas(ev, col, evidenceNonce, root.CaFingerprints,
+				refVals[ar.TRUST_ANCHOR_IAS]))
 
 		case ar.TYPE_EVIDENCE_SW:
-			r, ok := VerifySw(ev, col, evidenceNonce, refVals[ar.TRUST_ANCHOR_SW])
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("SW measurement"))
-			}
-			result.Measurements = append(result.Measurements, *r)
+			addMeasurements(result, "SW", *VerifySw(ev, col, evidenceNonce, refVals[ar.TRUST_ANCHOR_SW]))
 
 		case ar.TYPE_EVIDENCE_SWIMA:
-			r, ok := VerifySwima(ev, col, evidenceNonce, refVals[ar.TRUST_ANCHOR_SWIMA])
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("IMA measurement"))
-			}
-			result.Measurements = append(result.Measurements, *r)
+			addMeasurements(result, "IMA", *VerifySwima(ev, col, evidenceNonce,
+				refVals[ar.TRUST_ANCHOR_SWIMA]))
 
 		case ar.TYPE_EVIDENCE_AZURE_SNP, ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM:
-			results, ok := VerifyAzure(report.Evidences, report.Context.Collateral, evidenceNonce,
-				root.TdxPolicy, root.SnpPolicy, root.CaFingerprints, refVals[ar.TRUST_ANCHOR_TDX],
-				refVals[ar.TRUST_ANCHOR_SNP], refVals[ar.TRUST_ANCHOR_TPM], s)
-			if !ok {
-				result.Fail(ar.VerifyMeasurement, errors.New("azure measurements"))
-			}
-			result.Measurements = append(result.Measurements, results...)
+			addMeasurements(result, "azure", VerifyAzure(report.Evidences, report.Context.Collateral,
+				evidenceNonce, root.TdxPolicy, root.SnpPolicy, root.CaFingerprints,
+				refVals[ar.TRUST_ANCHOR_TDX], refVals[ar.TRUST_ANCHOR_SNP],
+				refVals[ar.TRUST_ANCHOR_TPM], s)...)
 
 			// Required because we process multiple measurements for azure
 			break Loop
@@ -350,9 +319,7 @@ Loop:
 	// provided
 	if !skipPeerAuth {
 		result.PeerAuth = verifyPeerAuthorization(localRole, &result.Metadata)
-		if result.PeerAuth.Status == ar.StatusFail {
-			result.Summary.Status = ar.StatusFail
-		}
+		result.Summary.Status = result.Summary.Status.Worse(result.PeerAuth.Status)
 	}
 
 	// Add additional information
@@ -386,6 +353,21 @@ Loop:
 	}
 
 	return result
+}
+
+// addMeasurements appends measurement results and propagates their status to the attestation
+// result
+func addMeasurements(result *ar.AttestationResult, name string, ms ...ar.MeasurementResult) {
+	for _, m := range ms {
+		switch m.Summary.Status {
+		case ar.StatusSuccess:
+		case ar.StatusWarn:
+			result.Warn(ar.VerifyMeasurement, fmt.Errorf("%v measurement", name))
+		default:
+			result.Fail(ar.VerifyMeasurement, fmt.Errorf("%v measurement", name))
+		}
+		result.Measurements = append(result.Measurements, m)
+	}
 }
 
 // verifyNonce compares a measured nonce against an expected nonce and populates the
