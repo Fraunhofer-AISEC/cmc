@@ -29,7 +29,7 @@ import (
 
 // The attestation report version
 const (
-	reportVersion = "3.6.0"
+	reportVersion = "3.7.0"
 )
 
 func GetReportVersion() string {
@@ -187,7 +187,7 @@ type Manifest struct {
 	TdxPolicy      *TdxPolicy             `json:"tdxPolicy,omitempty" cbor:"16,keyasint,omitempty"`
 	SgxPolicy      *SgxPolicy             `json:"sgxPolicy,omitempty" cbor:"17,keyasint,omitempty"`
 	Details        map[string]interface{} `json:"details,omitempty" cbor:"18,keyasint,omitempty"`
-	OmspServer     string                 `json:"omspServer,omitempty" cbor:"20,keyasint,omitempty"`
+	OmspServer     string                 `json:"omspServer,omitempty" cbor:"19,keyasint,omitempty"`
 }
 
 // ImageDescription ties together all manifests
