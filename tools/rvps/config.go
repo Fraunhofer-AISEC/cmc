@@ -16,6 +16,7 @@
 package main
 
 import (
+	"crypto"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/exp/maps"
@@ -33,6 +35,8 @@ type config struct {
 	Address     string
 	LogLevel    string
 	MetadataCAs []*x509.Certificate
+	tlsKey      crypto.PrivateKey
+	tlsCaChain  []*x509.Certificate
 }
 
 const (
@@ -40,6 +44,8 @@ const (
 	flagAddress    = "addr"
 	flagMetadataCA = "ca"
 	flagLogLevel   = "log"
+	flagTLSKey     = "tls-key"
+	flagTLSCaChain = "tls-ca-chain"
 )
 
 var (
@@ -65,13 +71,22 @@ var (
 			Required: true,
 		},
 		&cli.StringSliceFlag{
-			Name:  flagMetadataCA,
-			Usage: "trusted metadata root CA certificates (PEM or DER), none means pushed metadata is stored unverified",
+			Name:     flagMetadataCA,
+			Usage:    "trusted metadata root CA certificates (PEM or DER), none means pushed metadata is stored unverified",
+			Required: true,
 		},
 		&cli.StringFlag{
 			Name:  flagLogLevel,
 			Usage: fmt.Sprintf("logging level: %v", strings.Join(maps.Keys(logLevels), ",")),
 			Value: "info",
+		},
+		&cli.StringFlag{
+			Name:  flagTLSKey,
+			Usage: "TLS key for RVPS HTTPS server (no key and chain implies plain HTTP)",
+		},
+		&cli.StringFlag{
+			Name:  flagTLSCaChain,
+			Usage: "comma-separated paths to TLS certificate chain for RVPS HTTPS server (no key and chain implies plain HTTP)",
 		},
 	}
 )
@@ -119,6 +134,20 @@ func fetchConfig(cmd *cli.Command) (*config, error) {
 		}
 	} else {
 		log.Info("Running without metadata signature verification")
+	}
+
+	// parse the tls parameter
+	if cmd.IsSet(flagTLSKey) || cmd.IsSet(flagTLSCaChain) {
+		var err error
+		cfg.tlsKey, err = internal.LoadPrivateKey(cmd.String(flagTLSKey))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load private key: %w", err)
+		}
+
+		cfg.tlsCaChain, err = internal.ReadCerts(strings.Split(cmd.String(flagTLSCaChain), ","))
+		if err != nil {
+			return nil, fmt.Errorf("failed to load certificate chain: %w", err)
+		}
 	}
 	return cfg, nil
 }

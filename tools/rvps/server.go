@@ -17,6 +17,8 @@ package main
 
 import (
 	"context"
+	"crypto"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
@@ -39,13 +41,36 @@ const (
 	serverTimeout = 60 * time.Second
 )
 
-func RunServer(ctx context.Context, db *Database, metadataCAs []*x509.Certificate, addr string) error {
+func RunServer(ctx context.Context, db *Database, metadataCAs []*x509.Certificate, addr string, tlsKey crypto.PrivateKey, tlsCaChain []*x509.Certificate) error {
 	s := &Server{database: db, metadataCAs: metadataCAs}
+
+	// configure the tls parameter
+	var tlsUnpackedChain [][]byte
+	for _, c := range tlsCaChain {
+		tlsUnpackedChain = append(tlsUnpackedChain, c.Raw)
+	}
+	var tlsCfg *tls.Config
+	if tlsKey != nil {
+		tlsCfg = &tls.Config{
+			MinVersion:       tls.VersionTLS12,
+			CurvePreferences: []tls.CurveID{tls.CurveP521, tls.CurveP384, tls.CurveP256},
+			ClientAuth:       tls.NoClientCert,
+			ClientCAs:        nil,
+			Certificates: []tls.Certificate{
+				{
+					Certificate: tlsUnpackedChain,
+					PrivateKey:  tlsKey,
+					Leaf:        tlsCaChain[0],
+				},
+			},
+		}
+	}
 
 	// try to create the http server and start it
 	httpServer := http.Server{
 		Addr:         addr,
 		Handler:      http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) { s.handleDispatch(req, resp) }),
+		TLSConfig:    tlsCfg,
 		ReadTimeout:  serverTimeout,
 		WriteTimeout: serverTimeout,
 		IdleTimeout:  serverTimeout,

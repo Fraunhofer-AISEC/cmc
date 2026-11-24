@@ -48,7 +48,7 @@ func main() {
 			defer db.Close()
 
 			// Run the server until the context is cancelled
-			return RunServer(ctx, db, c.MetadataCAs, c.Address)
+			return RunServer(ctx, db, c.MetadataCAs, c.Address, c.tlsKey, c.tlsCaChain)
 		},
 	}
 
