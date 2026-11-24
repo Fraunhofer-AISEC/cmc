@@ -32,7 +32,7 @@ func VerifySwima(
 	collateral ar.Collateral,
 	nonce []byte,
 	refComponents []ar.Component,
-) (*ar.MeasurementResult, bool) {
+) *ar.MeasurementResult {
 
 	log.Debug("Verifying IMA measurements")
 
@@ -44,19 +44,19 @@ func VerifySwima(
 	// Alternative reference values are not supported for IMA measurements
 	if err := checkNoAlternatives(refComponents); err != nil {
 		result.Summary.Fail(ar.RefValAltUnsupported, err)
-		return result, false
+		return result
 	}
 
 	s, err := ar.NewJsonSerializer()
 	if err != nil {
 		result.Summary.Fail(ar.Internal, err)
-		return result, false
+		return result
 	}
 
 	pub, err := internal.ParsePublicKey(collateral.Key)
 	if err != nil {
 		result.Summary.Fail(ar.VerifyEvidence, err)
-		return result, false
+		return result
 	}
 	payload, sigs, sigResult := s.Verify(evidence.Data, pub)
 	if len(sigs) > 0 {
@@ -65,7 +65,7 @@ func VerifySwima(
 	if sigResult.Status != ar.StatusSuccess {
 		log.Warnf("Failed to verify ima evidence")
 		result.Summary.Fail(ar.VerifyEvidence)
-		return result, false
+		return result
 	}
 	log.Debug("Successfully verified IMA measurement signature")
 
@@ -73,7 +73,7 @@ func VerifySwima(
 	if err := s.Unmarshal(payload, imaEvidence); err != nil {
 		log.Warnf("Failed to unmarshal ima evidence")
 		result.Summary.Fail(ar.ParseEvidence)
-		return result, false
+		return result
 	}
 
 	result.Freshness = verifyNonce(imaEvidence.Nonce, nonce)
@@ -178,9 +178,9 @@ func VerifySwima(
 		log.Debugf("Aggregated IMA measurement hash matches evidence hash")
 	}
 
-	result.Summary.Status = ar.StatusFromBool(ok)
+	result.Summary.Status = result.Summary.Status.Worse(ar.StatusFromBool(ok))
 
 	log.Debugf("Finished verifying IMA measurements. Success: %v", ok)
 
-	return result, ok
+	return result
 }

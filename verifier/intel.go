@@ -1079,21 +1079,17 @@ func VerifyPckCertChain(quoteCerts SgxCertificates, pckCrl, rootCrl *x509.Revoca
 	return x509CertChains, ar.NotSpecified
 }
 
-func verifyQuoteVersion(quoteVersion, expectedVersion uint16) (ar.Result, bool) {
-	r := ar.Result{}
-	ok := quoteVersion == expectedVersion
-	if !ok {
+func verifyQuoteVersion(quoteVersion, expectedVersion uint16) ar.Result {
+	if quoteVersion != expectedVersion {
 		log.Warnf("Quote version mismatch: Report = %v, supplied = %v", quoteVersion, expectedVersion)
-		r.Status = ar.StatusFail
-		r.Expected = strconv.FormatUint(uint64(expectedVersion), 10)
-		r.Got = strconv.FormatUint(uint64(quoteVersion), 10)
-	} else {
-		r.Status = ar.StatusSuccess
+		return ar.Result{
+			Status:   ar.StatusFail,
+			Expected: strconv.FormatUint(uint64(expectedVersion), 10),
+			Got:      strconv.FormatUint(uint64(quoteVersion), 10),
+		}
 	}
-
 	log.Tracef("Quote version %v matches expected version", quoteVersion)
-
-	return r, ok
+	return ar.Result{Status: ar.StatusSuccess}
 }
 
 func verifyRootCas(quoteCerts *SgxCertificates, collateral *IntelCollateral, fingerprints []string) ar.ErrorCode {

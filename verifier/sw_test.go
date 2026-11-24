@@ -32,10 +32,9 @@ func TestVerifySw(t *testing.T) {
 		refvals    []ar.Component
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want  ar.Status
-		want1 bool
+		name string
+		args args
+		want ar.Status
 	}{
 		{
 			name: "Valid SW Measurement",
@@ -51,8 +50,7 @@ func TestVerifySw(t *testing.T) {
 				nonce:   validSwNonce,
 				refvals: []ar.Component{validUbuntuRefVal},
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			name: "Invalid Key",
@@ -68,8 +66,7 @@ func TestVerifySw(t *testing.T) {
 				nonce:   validSwNonce,
 				refvals: []ar.Component{validUbuntuRefVal},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Nonce",
@@ -85,8 +82,7 @@ func TestVerifySw(t *testing.T) {
 				nonce:   invalidSwNonce,
 				refvals: []ar.Component{validUbuntuRefVal},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Artifacts",
@@ -102,8 +98,7 @@ func TestVerifySw(t *testing.T) {
 				nonce:   validSwNonce,
 				refvals: []ar.Component{validUbuntuRefVal},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Evidence",
@@ -119,8 +114,7 @@ func TestVerifySw(t *testing.T) {
 				nonce:   validSwNonce,
 				refvals: []ar.Component{validUbuntuRefVal},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Refval",
@@ -136,8 +130,7 @@ func TestVerifySw(t *testing.T) {
 				nonce:   validSwNonce,
 				refvals: []ar.Component{invalidSwRefVal},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid OCI Config",
@@ -153,8 +146,7 @@ func TestVerifySw(t *testing.T) {
 				nonce:   validSwNonce,
 				refvals: []ar.Component{invalidSwRefValOciConfig},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 	}
 	logrus.SetLevel(logrus.TraceLevel)
@@ -162,16 +154,13 @@ func TestVerifySw(t *testing.T) {
 	for _, tt := range tests {
 
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := VerifySw(
+			got := VerifySw(
 				tt.args.evidence,
 				tt.args.collateral,
 				tt.args.nonce,
 				tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("VerifySw() got = %v, want %v", got.Summary.Status, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("VerifySw() got = %v, want %v", got1, tt.want)
 			}
 		})
 		// End FUT

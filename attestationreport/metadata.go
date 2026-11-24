@@ -66,15 +66,7 @@ func ParseAndVerifyMetadata(cas []*x509.Certificate, metadatamap map[string][]by
 	}
 
 	if checkOmsp {
-		successOmsp := checkManifestRevocation(results.ManifestResults, omspMap)
-		switch successOmsp {
-		case StatusFail:
-			success = StatusFail
-		case StatusWarn:
-			if success != StatusFail {
-				success = StatusWarn
-			}
-		}
+		success = success.Worse(checkManifestRevocation(results.ManifestResults, omspMap))
 	}
 
 	r := CheckMetadataCompatibility(&results)
@@ -487,8 +479,6 @@ func checkManifestRevocation(manifestResults []MetadataResult, omspMap map[strin
 				elem.OmspValidity = checkOmspValidity(resp.ThisUpdate, resp.NextUpdate)
 				if elem.OmspValidity.Status == StatusFail {
 					log.Debugf("Check for validity of the omsp response failed with error code(s) %v", elem.OmspValidity.ErrorCodes)
-					elem.Summary.Status = StatusFail
-					success = StatusFail
 				} else {
 					log.Debugf("omsp response is valid")
 				}
@@ -502,29 +492,17 @@ func checkManifestRevocation(manifestResults []MetadataResult, omspMap map[strin
 				case OmspStatusOutdated:
 					log.Debugf("%v is outdated (but not revoked)", elem.Name)
 					elem.OmspStatus.Warn(ManifestOutdated)
-					if elem.Summary.Status != StatusFail {
-						elem.Summary.Status = StatusWarn
-					}
-					if success != StatusFail {
-						success = StatusWarn
-					}
 				case OmspStatusRevoked:
 					log.Debugf("%v is revoked", elem.Name)
 					elem.OmspStatus.Fail(ManifestRevoked)
 					elem.RevocationTime = resp.RevocationTime
 					elem.RevocationReason = resp.RevocationReason
-					elem.Summary.Status = StatusFail
-					success = StatusFail
 				case OmspStatusUnknown:
 					log.Debugf("For %v the OMSP provider had no revocation information", elem.Name)
 					elem.OmspStatus.Fail(ManifestRevocationUnknown)
-					elem.Summary.Status = StatusFail
-					success = StatusFail
 				default:
 					log.Debugf("%v has an unknown revocation status assigned %v", elem.Name, resp.Status)
 					elem.OmspStatus.Fail(ManifestRevocationUnknown)
-					elem.Summary.Status = StatusFail
-					success = StatusFail
 				}
 				break
 			}
@@ -533,9 +511,14 @@ func checkManifestRevocation(manifestResults []MetadataResult, omspMap map[strin
 			log.Debugf("For %v (hash: %v) no revocation information was provided", elem.Name, elem.ManifestHash)
 			elem.OmspStatus = &Result{}
 			elem.OmspStatus.Fail(ManifestRevocationUnknown)
-			elem.Summary.Status = StatusFail
-			success = StatusFail
 		}
+
+		omspStatus := elem.OmspStatus.Status
+		if elem.OmspValidity != nil {
+			omspStatus = omspStatus.Worse(elem.OmspValidity.Status)
+		}
+		elem.Summary.Status = elem.Summary.Status.Worse(omspStatus)
+		success = success.Worse(omspStatus)
 	}
 	return success
 }

@@ -43,7 +43,7 @@ func VerifyTpm(
 	requireAkEku bool,
 	refComponents []ar.Component,
 	s ar.Serializer,
-) (*ar.MeasurementResult, bool) {
+) *ar.MeasurementResult {
 
 	result := &ar.MeasurementResult{
 		Type: ar.TYPE_RESULT_TPM,
@@ -59,14 +59,14 @@ func VerifyTpm(
 	// alternative reference values
 	if err := checkNoAlternatives(refComponents); err != nil {
 		result.Summary.Fail(ar.RefValAltUnsupported, err)
-		return result, false
+		return result
 	}
 
 	// Extract TPM Quote (TPMS ATTEST) and signature
 	tpmsAttest, err := tpm2.DecodeAttestationData(evidence.Data)
 	if err != nil {
 		result.Summary.Fail(ar.ParseEvidence, err)
-		return result, false
+		return result
 	}
 	log.Tracef("Decoded quote PCR with hash %v and PCR selection %v",
 		tpmsAttest.AttestedQuoteInfo.PCRSelection.Hash,
@@ -76,7 +76,7 @@ func VerifyTpm(
 	quoteHashAlg, err := tpmAlgoToHash(tpmsAttest.AttestedQuoteInfo.PCRSelection.Hash)
 	if err != nil {
 		result.Summary.Fail(ar.ParseEvidence, err)
-		return result, false
+		return result
 	}
 	log.Tracef("Detected %v quote hash algorithm", quoteHashAlg.String())
 
@@ -84,7 +84,7 @@ func VerifyTpm(
 	aggHashAlg, err := quoteSigHash(evidence.Signature)
 	if err != nil {
 		result.Summary.Fail(ar.ParseEvidence, err)
-		return result, false
+		return result
 	}
 	log.Tracef("Detected %v aggregated PCR hash algorithm", aggHashAlg.String())
 
@@ -112,7 +112,7 @@ func VerifyTpm(
 		log.Warnf("Failed to parse measurement certs: %v", err)
 		result.Signature.CertChainCheck.Fail(ar.ParseCert)
 		result.Summary.Status = ar.StatusFail
-		return result, false
+		return result
 	}
 
 	result.Signature.SignCheck = VerifyTpmQuoteSignature(evidence.Data, evidence.Signature, mCerts[0])
@@ -144,7 +144,7 @@ func VerifyTpm(
 		log.Warnf("Failed to verify TPM measurements")
 	}
 
-	return result, result.Summary.Status == ar.StatusSuccess
+	return result
 }
 
 // verifyPcrs recalculates the PCRs from the measurement artifacts and the reference values.

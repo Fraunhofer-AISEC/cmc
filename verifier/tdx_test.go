@@ -37,10 +37,9 @@ func TestVerifyTdx(t *testing.T) {
 		useCurrentTime bool
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want  ar.Status
-		want1 bool
+		name string
+		args args
+		want ar.Status
 	}{
 		{
 			name: "Valid Report With Eventlog",
@@ -73,8 +72,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			name: "Invalid Report Eventlog 1",
@@ -107,8 +105,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Report Eventlog 2",
@@ -140,8 +137,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Valid Report Without Eventlog",
@@ -173,8 +169,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			name: "Valid MRSEAM Alternatives",
@@ -191,8 +186,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals:        mrSeamAlternatives,
 				nonce:          validTDXNonce,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			name: "No Matching MRSEAM Alternative",
@@ -209,8 +203,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals:        mrSeamNoMatch,
 				nonce:          validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Multiple MRSEAM Reference Values Without Alternative Group",
@@ -227,8 +220,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals:        mrSeamUngrouped,
 				nonce:          validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Alternative Group On Extended Register",
@@ -245,8 +237,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals:        altGroupOnRtmr,
 				nonce:          validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Report Signature",
@@ -278,8 +269,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Nonce",
@@ -311,8 +301,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   invalidTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Certificate Chain",
@@ -344,8 +333,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Refvals",
@@ -377,8 +365,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: invalidTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Attributes",
@@ -411,8 +398,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Missing Collateral",
@@ -442,8 +428,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Missing Reference Values",
@@ -475,8 +460,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: invalidTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid TCB Info",
@@ -508,8 +492,7 @@ func TestVerifyTdx(t *testing.T) {
 				refvals: validTdxRefvals,
 				nonce:   validTDXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Outdated TCB Info",
@@ -542,8 +525,7 @@ func TestVerifyTdx(t *testing.T) {
 				nonce:          validTDXNonce,
 				useCurrentTime: true,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 	}
 
@@ -565,13 +547,10 @@ func TestVerifyTdx(t *testing.T) {
 			}
 
 			log.Infof("Running Unit Test %q", tt.name)
-			got, got1 := VerifyTdx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
+			got := VerifyTdx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.policy, tt.args.caFingerprints, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifyTdxMeasurements() --GOT-- = %v, --WANT-- %v", got.Summary.Status, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("verifyTdxMeasurements() --GOT1-- = %v, --WANT-- %v", got1, tt.want)
 			}
 		})
 	}

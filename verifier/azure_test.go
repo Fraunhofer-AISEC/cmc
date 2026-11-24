@@ -38,10 +38,9 @@ func TestVerifyAzure(t *testing.T) {
 		s              ar.Serializer
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want  []ar.MeasurementResult
-		want1 bool
+		name string
+		args args
+		want []ar.MeasurementResult
 	}{
 		{
 			name: "Successful Azure Verification",
@@ -54,8 +53,7 @@ func TestVerifyAzure(t *testing.T) {
 				vtpmRefVals:    validVtpmRefvalsAzure,
 				nonce:          validVtpmNonce,
 			},
-			want:  successfulAzureResult,
-			want1: true,
+			want: successfulAzureResult,
 		},
 		{
 			name: "Failed Azure Verification Invalid Fingerprint",
@@ -68,8 +66,7 @@ func TestVerifyAzure(t *testing.T) {
 				vtpmRefVals:    validVtpmRefvalsAzure,
 				nonce:          validVtpmNonce,
 			},
-			want:  failedAzureResultTdx,
-			want1: false,
+			want: failedAzureResultTdx,
 		},
 		{
 			name: "Failed Azure Verification Invalid TDX Refvals",
@@ -82,8 +79,7 @@ func TestVerifyAzure(t *testing.T) {
 				vtpmRefVals:    validVtpmRefvalsAzure,
 				nonce:          validVtpmNonce,
 			},
-			want:  failedAzureResultTdx,
-			want1: false,
+			want: failedAzureResultTdx,
 		},
 		{
 			name: "Failed Azure Verification Invalid vTPM Refvals",
@@ -96,8 +92,7 @@ func TestVerifyAzure(t *testing.T) {
 				vtpmRefVals:    invalidVtpmRefvalsAzure, // Invalid vTPM refvals azure
 				nonce:          validVtpmNonce,
 			},
-			want:  failedAzureResultVtpm,
-			want1: false,
+			want: failedAzureResultVtpm,
 		},
 	}
 
@@ -113,17 +108,17 @@ func TestVerifyAzure(t *testing.T) {
 	for _, tt := range tests {
 
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := VerifyAzure(tt.args.evidences, tt.args.collaterals, tt.args.nonce,
+			got := VerifyAzure(tt.args.evidences, tt.args.collaterals, tt.args.nonce,
 				tt.args.tdxPolicy, tt.args.snpPolicy, tt.args.caFingerprints,
 				tt.args.tdxRefVals, tt.args.snpRefVals, tt.args.vtpmRefVals,
 				tt.args.s)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v results, want %v", len(got), len(tt.want))
+			}
 			for i := range got {
 				if got[i].Summary.Status != tt.want[i].Summary.Status {
 					t.Errorf("got %v: %v, want %v: %v", got[i].Type, got[i].Summary.Status, tt.want[i].Type, tt.want[i].Summary.Status)
 				}
-			}
-			if got1 != tt.want1 {
-				t.Errorf("verifyAzureMeasurements() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}

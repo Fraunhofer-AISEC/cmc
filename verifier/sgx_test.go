@@ -37,10 +37,9 @@ func TestVerifySgx(t *testing.T) {
 		refvals        []ar.Component
 	}
 	tests := []struct {
-		name  string
-		args  args
-		want  ar.Status
-		want1 bool
+		name string
+		args args
+		want ar.Status
 	}{
 		{
 			name: "Valid Attestation Report",
@@ -67,8 +66,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: validSgxRefvals,
 				nonce:   validSGXNonce,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			name: "Invalid Certificate Chain",
@@ -95,8 +93,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: validSgxRefvals,
 				nonce:   validSGXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Report Signature",
@@ -123,8 +120,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: validSgxRefvals,
 				nonce:   validSGXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Missing Collateral",
@@ -147,8 +143,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: validSgxRefvals,
 				nonce:   validSGXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Measurement",
@@ -175,8 +170,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: invalidSgxRefvals,
 				nonce:   validSGXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Attributes",
@@ -203,8 +197,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: validSgxRefvals,
 				nonce:   validSGXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Nonce",
@@ -231,8 +224,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: validSgxRefvals,
 				nonce:   []byte{},
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid MRSIGNER",
@@ -259,8 +251,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals: validSgxRefvals,
 				nonce:   validSGXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Missing SGX Policy",
@@ -277,8 +268,7 @@ func TestVerifySgx(t *testing.T) {
 				refvals:        validSgxRefvals,
 				nonce:          validSGXNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 	}
 	logrus.SetLevel(logrus.TraceLevel)
@@ -294,13 +284,10 @@ func TestVerifySgx(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := VerifySgx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
+			got := VerifySgx(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.policy, tt.args.caFingerprints, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifySgx() got = %v, want %v", got.Summary.Status, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("verifySgx() got1 = %v, want %v", got1, tt.want)
 			}
 		})
 	}

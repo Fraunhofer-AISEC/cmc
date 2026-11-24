@@ -94,7 +94,7 @@ func VerifyTdx(
 	policy *ar.TdxPolicy,
 	caFingerprints []string,
 	refComponents []ar.Component,
-) (*ar.MeasurementResult, bool) {
+) *ar.MeasurementResult {
 
 	log.Debug("Verifying TDX measurements")
 
@@ -110,12 +110,12 @@ func VerifyTdx(
 	if len(refComponents) == 0 {
 		log.Warnf("Could not find TDX reference values")
 		result.Summary.Fail(ar.RefValNotPresent)
-		return result, false
+		return result
 	}
 	if policy == nil {
 		log.Warnf("no TDX policy present")
 		result.Summary.Fail(ar.PolicyNotPresent)
-		return result, false
+		return result
 	}
 
 	// Parse intel collateral (QE identity, TCB info, certificate revocation lists)
@@ -127,13 +127,13 @@ func VerifyTdx(
 			if intelCollateralRaw == nil {
 				log.Warnf("Could not find TDX collateral")
 				result.Summary.Fail(ar.CollateralNotPresent)
-				return result, false
+				return result
 			}
 			intelCollateral, err = ParseCollateral(intelCollateralRaw)
 			if err != nil {
 				log.Warnf("Could not parse TDX collateral artifact: %v", err)
 				result.Summary.Fail(ar.ParseCollateral)
-				return result, false
+				return result
 			}
 		}
 	}
@@ -143,7 +143,7 @@ func VerifyTdx(
 	if err != nil {
 		log.Warnf("Failed to decode TDX report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
-		return result, false
+		return result
 	}
 
 	// Compare nonce for freshness (called report data in the TDX attestation report structure)
@@ -158,14 +158,14 @@ func VerifyTdx(
 	var quoteCerts SgxCertificates = tdxQuote.QuoteSignatureData.QECertificationData.QEReportCertificationData.PCKCertChain
 	if quoteCerts.RootCACert == nil || quoteCerts.IntermediateCert == nil || quoteCerts.PCKCert == nil {
 		result.Summary.Fail(ar.VerifyCertChain)
-		return result, false
+		return result
 	}
 
 	// Match measurement root CAs against reference root CA fingerprint
 	errCode := verifyRootCas(&quoteCerts, intelCollateral, caFingerprints)
 	if errCode != ar.NotSpecified {
 		result.Summary.Fail(errCode)
-		return result, false
+		return result
 	}
 
 	// Parse and verify PCK certificate extensions
@@ -173,7 +173,7 @@ func VerifyTdx(
 	if err != nil {
 		log.Warnf("failed to parse SGX Extensions from PCK Certificate: %v", err)
 		result.Summary.Fail(ar.ParseCert)
-		return result, false
+		return result
 	}
 
 	// Verify TCB info
@@ -199,10 +199,10 @@ func VerifyTdx(
 	}
 
 	// Verify Quote Signature including certificate chains and CRLs
-	sig, ret := VerifyIntelQuoteSignature(evidence.Data, tdxQuote.QuoteSignatureData,
+	sig, sigOk := VerifyIntelQuoteSignature(evidence.Data, tdxQuote.QuoteSignatureData,
 		tdxQuote.QuoteSignatureDataLen, int(tdxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
 		ar.TDX_QUOTE_TYPE, intelCollateral.PckCrl, intelCollateral.RootCaCrl)
-	if !ret {
+	if !sigOk {
 		result.Summary.Status = ar.StatusFail
 	}
 	result.Signature = sig
@@ -226,14 +226,14 @@ func VerifyTdx(
 	result.TdxResult.XfamCheck = verifyTdxXfam(tdxQuote.QuoteBody.XFAM[:], policy.Xfam, policy.XfamIgnoreMask)
 	if result.TdxResult.XfamCheck.Status != ar.StatusSuccess {
 		log.Warnf("TDX XFAM check failed")
-		result.Summary.Status = ar.StatusFail
 	}
+	result.Summary.Status = result.Summary.Status.Worse(result.TdxResult.XfamCheck.Status)
 
 	result.TdxResult.SeamAttributesCheck = verifyTdxSeamAttributes(tdxQuote.QuoteBody.SeamAttributes[:])
 	if result.TdxResult.SeamAttributesCheck.Status != ar.StatusSuccess {
 		log.Warnf("TDX SEAM attributes check failed")
-		result.Summary.Status = ar.StatusFail
 	}
+	result.Summary.Status = result.Summary.Status.Worse(result.TdxResult.SeamAttributesCheck.Status)
 
 	// Verify Quote Body values against reference TDX policy
 	var okTdAttr bool
@@ -244,11 +244,8 @@ func VerifyTdx(
 	}
 
 	// Check version
-	result.TdxResult.VersionMatch, ret = verifyQuoteVersion(tdxQuote.QuoteHeader.Version, policy.QuoteVersion)
-	if !ret {
-		result.Summary.Status = ar.StatusFail
-	}
-	log.Tracef("Successfully validated TDX quote version")
+	result.TdxResult.VersionMatch = verifyQuoteVersion(tdxQuote.QuoteHeader.Version, policy.QuoteVersion)
+	result.Summary.Status = result.Summary.Status.Worse(result.TdxResult.VersionMatch.Status)
 
 	if result.Summary.Status == ar.StatusSuccess {
 		log.Debug("Successfully verified TDX measurements")
@@ -256,7 +253,7 @@ func VerifyTdx(
 		log.Warn("Failed to verify TDX measurements")
 	}
 
-	return result, result.Summary.Status == ar.StatusSuccess
+	return result
 }
 
 // Parses the report into the TDReport structure

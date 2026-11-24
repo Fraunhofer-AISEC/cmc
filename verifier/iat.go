@@ -56,7 +56,7 @@ func VerifyIas(
 	nonce []byte,
 	caFingerprints []string,
 	refComponents []ar.Component,
-) (*ar.MeasurementResult, bool) {
+) *ar.MeasurementResult {
 
 	result := &ar.MeasurementResult{
 		Type: ar.TYPE_RESULT_IAT,
@@ -67,35 +67,35 @@ func VerifyIas(
 	certs, err := internal.ParseCertsDer(collateral.Certs)
 	if err != nil || len(certs) == 0 {
 		result.Summary.Fail(ar.ParseCert, fmt.Errorf("failed to parse IAS certificates: %w", err))
-		return result, false
+		return result
 	}
 
 	if len(refComponents) == 0 {
 		result.Summary.Fail(ar.RefValNotPresent)
-		return result, false
+		return result
 	}
 
 	// Alternative reference values are not supported for IAS measurements
 	if err := checkNoAlternatives(refComponents); err != nil {
 		result.Summary.Fail(ar.RefValAltUnsupported, err)
-		return result, false
+		return result
 	}
 
 	s, err := ar.NewCborSerializer()
 	if err != nil {
 		result.Summary.Fail(ar.Internal, err)
-		return result, false
+		return result
 	}
 
 	log.Debug("Verifying CBOR IAT")
 
-	iatresult, payload, ok := verifyIat(evidence.Data, certs[0])
-	if !ok {
+	sigResult, payload := verifyIat(evidence.Data, certs[0])
+	result.Signature.SignCheck = sigResult
+	if sigResult.Status != ar.StatusSuccess {
 		log.Warnf("IAS signature verification failed")
 		result.Summary.Fail(ar.VerifySignature)
-		return result, false
+		return result
 	}
-	result.Signature.SignCheck = iatresult
 
 	log.Debug("Unmarshalling CBOR IAT")
 
@@ -104,7 +104,7 @@ func VerifyIas(
 	if err != nil {
 		log.Warnf("Failed to unmarshal IAT: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
-		return result, false
+		return result
 	}
 
 	log.Debug("Verifying nonce")
@@ -146,7 +146,7 @@ func VerifyIas(
 		if err != nil || ta != ar.TRUST_ANCHOR_IAS {
 			log.Tracef("IAS reference value invalid trust anchor %v (err: %v)", ta, err)
 			result.Summary.Fail(ar.RefValType)
-			return result, false
+			return result
 		}
 		found := false
 		for _, swc := range iat.SwComponents {
@@ -209,17 +209,17 @@ func VerifyIas(
 		}
 	}
 
-	result.Summary.Status = ar.StatusSuccess
+	result.Summary.Status = result.Summary.Status.Worse(ar.StatusFromBool(ok))
 
-	return result, ok
+	return result
 }
 
-func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte, bool) {
+func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte) {
 
 	if cert == nil {
 		result := ar.Result{}
 		result.Fail(ar.ExtractPubKey, fmt.Errorf("certificate is nil"))
-		return result, nil, false
+		return result, nil
 	}
 
 	// create a Sign1Message from a raw COSE_Sign payload
@@ -228,14 +228,14 @@ func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte, bool) {
 	if err != nil {
 		result := ar.Result{}
 		result.Fail(ar.ParseEvidence, err)
-		return result, nil, false
+		return result, nil
 	}
 
 	publicKey, okKey := cert.PublicKey.(*ecdsa.PublicKey)
 	if !okKey {
 		result := ar.Result{}
 		result.Fail(ar.ExtractPubKey, fmt.Errorf("failed to extract public key from certificate: %v", err))
-		return result, nil, false
+		return result, nil
 	}
 
 	// create a verifier from a trusted private key
@@ -243,15 +243,15 @@ func verifyIat(data []byte, cert *x509.Certificate) (ar.Result, []byte, bool) {
 	if err != nil {
 		result := ar.Result{}
 		result.Fail(ar.Internal, err)
-		return result, nil, false
+		return result, nil
 	}
 
 	err = msgToVerify.Verify(nil, verifier)
 	if err != nil {
 		result := ar.Result{}
 		result.Fail(ar.VerifySignature, err)
-		return result, nil, false
+		return result, nil
 	}
 
-	return ar.Result{Status: ar.StatusSuccess}, msgToVerify.Payload, true
+	return ar.Result{Status: ar.StatusSuccess}, msgToVerify.Payload
 }

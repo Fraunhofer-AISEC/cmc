@@ -195,19 +195,19 @@ func TestAlternativesRejectedByUnsupportedVerifiers(t *testing.T) {
 
 	verifiers := map[string]func() *ar.MeasurementResult{
 		"tpm": func() *ar.MeasurementResult {
-			r, _ := VerifyTpm(ar.Evidence{}, ar.Collateral{}, nil, nil, false, refs, nil)
+			r := VerifyTpm(ar.Evidence{}, ar.Collateral{}, nil, nil, false, refs, nil)
 			return r
 		},
 		"sgx": func() *ar.MeasurementResult {
-			r, _ := VerifySgx(ar.Evidence{}, ar.Collateral{}, nil, nil, nil, refs)
+			r := VerifySgx(ar.Evidence{}, ar.Collateral{}, nil, nil, nil, refs)
 			return r
 		},
 		"sw": func() *ar.MeasurementResult {
-			r, _ := VerifySw(ar.Evidence{}, ar.Collateral{}, nil, refs)
+			r := VerifySw(ar.Evidence{}, ar.Collateral{}, nil, refs)
 			return r
 		},
 		"swima": func() *ar.MeasurementResult {
-			r, _ := VerifySwima(ar.Evidence{}, ar.Collateral{}, nil, refs)
+			r := VerifySwima(ar.Evidence{}, ar.Collateral{}, nil, refs)
 			return r
 		},
 	}

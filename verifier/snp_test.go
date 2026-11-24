@@ -41,7 +41,6 @@ func TestVerifySnp(t *testing.T) {
 		name            string
 		args            args
 		want            ar.Status
-		want1           bool
 		wantHostDataGot string // "" means skip the HostDataCheck.Got check
 	}{
 		{
@@ -73,7 +72,6 @@ func TestVerifySnp(t *testing.T) {
 				nonce:   validNonce,
 			},
 			want:            ar.StatusSuccess,
-			want1:           true,
 			wantHostDataGot: "0000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
@@ -104,8 +102,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Certificate Chain",
@@ -135,8 +132,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid VCEK Certificate",
@@ -165,8 +161,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Report",
@@ -195,8 +190,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Measurement",
@@ -225,8 +219,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: invalidRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Policy Parameter Debug",
@@ -255,8 +248,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Nonce",
@@ -285,8 +277,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   invalidNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Reference Value Type",
@@ -315,8 +306,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: invalidRefvalsType,
 				nonce:   invalidNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "No Reference Values Present",
@@ -344,8 +334,7 @@ func TestVerifySnp(t *testing.T) {
 				},
 				nonce: validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Firmware",
@@ -374,8 +363,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Valid Alternative Reference Values",
@@ -404,8 +392,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvalAlternatives,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusSuccess,
-			want1: true,
+			want: ar.StatusSuccess,
 		},
 		{
 			name: "No Matching Alternative Reference Value",
@@ -434,8 +421,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: noMatchRefvalAlternatives,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Multiple Reference Values Without Alternative Group",
@@ -464,8 +450,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: ungroupedRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Inconsistent Alternative Groups",
@@ -494,8 +479,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: mismatchedGroupRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid TCB",
@@ -524,8 +508,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid Policy Code Name",
@@ -554,8 +537,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Invalid CA Fingerprints",
@@ -584,8 +566,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals: validRefvals,
 				nonce:   validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "Missing SNP Policy",
@@ -602,8 +583,7 @@ func TestVerifySnp(t *testing.T) {
 				refvals:        validRefvals,
 				nonce:          validNonce,
 			},
-			want:  ar.StatusFail,
-			want1: false,
+			want: ar.StatusFail,
 		},
 		{
 			name: "HostData Match Policy",
@@ -630,7 +610,6 @@ func TestVerifySnp(t *testing.T) {
 				nonce:   validNonce,
 			},
 			want:            ar.StatusSuccess,
-			want1:           true,
 			wantHostDataGot: "0000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
@@ -658,19 +637,15 @@ func TestVerifySnp(t *testing.T) {
 				nonce:   validNonce,
 			},
 			want:            ar.StatusFail,
-			want1:           false,
 			wantHostDataGot: "0000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := VerifySnp(tt.args.evidence, tt.args.collateral, tt.args.nonce,
+			got := VerifySnp(tt.args.evidence, tt.args.collateral, tt.args.nonce,
 				tt.args.policy, tt.args.caFingerprints, tt.args.refvals)
 			if got.Summary.Status != tt.want {
 				t.Errorf("verifySnp() got = %v, want %v", got.Summary.Status, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("verifySnp() got1 = %v, want %v", got1, tt.want)
 			}
 			if tt.wantHostDataGot != "" {
 				if got.SnpResult == nil {
@@ -692,7 +667,6 @@ func Test_verifySnpHostData(t *testing.T) {
 	tests := []struct {
 		name         string
 		args         args
-		wantOk       bool
 		wantGot      string
 		wantExpected string
 		wantStatus   ar.Status
@@ -700,7 +674,6 @@ func Test_verifySnpHostData(t *testing.T) {
 		{
 			name:         "No Policy",
 			args:         args{got: make([]byte, 32), expected: nil},
-			wantOk:       true,
 			wantGot:      "0000000000000000000000000000000000000000000000000000000000000000",
 			wantExpected: "",
 			wantStatus:   ar.StatusSuccess,
@@ -708,7 +681,6 @@ func Test_verifySnpHostData(t *testing.T) {
 		{
 			name:         "Match",
 			args:         args{got: make([]byte, 32), expected: make([]byte, 32)},
-			wantOk:       true,
 			wantGot:      "0000000000000000000000000000000000000000000000000000000000000000",
 			wantExpected: "0000000000000000000000000000000000000000000000000000000000000000",
 			wantStatus:   ar.StatusSuccess,
@@ -716,7 +688,6 @@ func Test_verifySnpHostData(t *testing.T) {
 		{
 			name:         "Mismatch",
 			args:         args{got: make([]byte, 32), expected: validHostData},
-			wantOk:       false,
 			wantGot:      "0000000000000000000000000000000000000000000000000000000000000000",
 			wantExpected: "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
 			wantStatus:   ar.StatusFail,
@@ -724,10 +695,7 @@ func Test_verifySnpHostData(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, ok := verifySnpHostData(tt.args.got, tt.args.expected)
-			if ok != tt.wantOk {
-				t.Errorf("verifySnpHostData() ok = %v, want %v", ok, tt.wantOk)
-			}
+			r := verifySnpHostData(tt.args.got, tt.args.expected)
 			if r.Got != tt.wantGot {
 				t.Errorf("verifySnpHostData() Got = %q, want %q", r.Got, tt.wantGot)
 			}

@@ -44,7 +44,7 @@ func VerifySgx(
 	policy *ar.SgxPolicy,
 	caFingerprints []string,
 	refComponents []ar.Component,
-) (*ar.MeasurementResult, bool) {
+) *ar.MeasurementResult {
 
 	var err error
 	result := &ar.MeasurementResult{
@@ -58,18 +58,18 @@ func VerifySgx(
 	// Alternative reference values are not supported for SGX
 	if err := checkNoAlternatives(refComponents); err != nil {
 		result.Summary.Fail(ar.RefValAltUnsupported, err)
-		return result, false
+		return result
 	}
 
 	if len(refComponents) == 0 {
 		log.Warnf("Could not find SGX reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
-		return result, false
+		return result
 	} else if len(refComponents) > 1 {
 		log.Debugf("Report contains %v reference values. Currently, only one SGX reference value is supported",
 			len(refComponents))
 		result.Summary.Fail(ar.RefValMultiple)
-		return result, false
+		return result
 	}
 	sgxReferenceValue := refComponents[0]
 
@@ -77,19 +77,19 @@ func VerifySgx(
 	if len(evidence.Data) < SGX_QUOTE_MIN_SIZE {
 		log.Warnf("Invalid SGX Report")
 		result.Summary.Fail(ar.ParseEvidence)
-		return result, false
+		return result
 	}
 
 	ta, err := sgxReferenceValue.GetTrustAnchor()
 	if err != nil || ta != ar.TRUST_ANCHOR_SGX {
 		log.Warnf("SGX reference value invalid trust anchor %v (err: %v)", ta, err)
 		result.Summary.Fail(ar.RefValType)
-		return result, false
+		return result
 	}
 
 	if policy == nil {
 		result.Summary.Fail(ar.PolicyNotPresent)
-		return result, false
+		return result
 	}
 
 	// Extract the attestation report into the SGXReport data structure
@@ -97,12 +97,13 @@ func VerifySgx(
 	if err != nil {
 		log.Warnf("Failed to decode SGX report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
-		return result, false
+		return result
 	}
 
 	if ar.IntelQuoteType(sgxQuote.QuoteHeader.TeeType) != ar.SGX_QUOTE_TYPE {
-		log.Warnf("Unsupported SGX quote type (tee_type: %X)\n", sgxQuote.QuoteHeader.TeeType)
-		return result, false
+		result.Summary.Fail(ar.ParseEvidence,
+			fmt.Errorf("unsupported SGX quote type (tee_type: %X)", sgxQuote.QuoteHeader.TeeType))
+		return result
 	}
 
 	// Compare nonce for freshness
@@ -111,7 +112,7 @@ func VerifySgx(
 	result.Freshness = verifyNonce(sgxQuote.ISVEnclaveReport.ReportData[:], nonce64)
 	if result.Freshness.Status != ar.StatusSuccess {
 		result.Summary.Status = ar.StatusFail
-		return result, false
+		return result
 	}
 
 	// Obtain collateral from measurements
@@ -120,14 +121,14 @@ func VerifySgx(
 		collateral.Artifacts[0].Events[0].IntelCollateral == nil {
 		log.Warnf("Could not find TDX collateral")
 		result.Summary.Fail(ar.CollateralNotPresent)
-		return result, false
+		return result
 	}
 	intelCollateralRaw := collateral.Artifacts[0].Events[0].IntelCollateral
 	intelCollateral, err := ParseCollateral(intelCollateralRaw)
 	if err != nil {
 		log.Warnf("Could not parse SGX collateral")
 		result.Summary.Fail(ar.ParseCollateral)
-		return result, false
+		return result
 	}
 
 	// Extract quote PCK certificate chain. Currently only support for QECertDataType 5
@@ -138,26 +139,26 @@ func VerifySgx(
 		if err != nil {
 			log.Warnf("Failed to parse certificate chain from QECertData: %v", err)
 			result.Summary.Fail(ar.ParseCert)
-			return result, false
+			return result
 		}
 	} else {
 		log.Warnf("QECertDataType not supported: %v", sgxQuote.QuoteSignatureData.QECertDataType)
 		result.Summary.Fail(ar.ParseCert)
-		return result, false
+		return result
 	}
 
 	// Check that root CA from PCK cert chain is present in quote
 	if quoteCerts.RootCACert == nil {
 		log.Warnf("root cert is null")
 		result.Summary.Fail(ar.ParseCA)
-		return result, false
+		return result
 	}
 
 	// Match collateral root CAs against reference root CA fingerprint
 	errCode := verifyRootCas(&quoteCerts, intelCollateral, caFingerprints)
 	if errCode != ar.NotSpecified {
 		result.Summary.Fail(errCode)
-		return result, false
+		return result
 	}
 
 	// Parse and verify PCK certificate extensions
@@ -165,7 +166,7 @@ func VerifySgx(
 	if err != nil {
 		log.Warnf("failed to parse SGX Extensions from PCK Certificate: %v", err)
 		result.Summary.Fail(ar.ParseExtensions)
-		return result, false
+		return result
 	}
 
 	// Verify TcbInfo
@@ -194,10 +195,10 @@ func VerifySgx(
 
 	// Verify Quote Signature
 	log.Debugf("Verifying SGX quote signature")
-	sig, ret := VerifyIntelQuoteSignature(evidence.Data, sgxQuote.QuoteSignatureData,
+	sig, sigOk := VerifyIntelQuoteSignature(evidence.Data, sgxQuote.QuoteSignatureData,
 		sgxQuote.QuoteSignatureDataLen, int(sgxQuote.QuoteHeader.AttestationKeyType), quoteCerts,
 		ar.IntelQuoteType(sgxQuote.QuoteHeader.TeeType), intelCollateral.PckCrl, intelCollateral.RootCaCrl)
-	if !ret {
+	if !sigOk {
 		success = false
 	}
 	result.Signature = sig
@@ -214,14 +215,12 @@ func VerifySgx(
 
 	// Check version
 	log.Debugf("Verifying SGX quote version")
-	result.SgxResult.VersionMatch, ret = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, policy.QuoteVersion)
-	if !ret {
-		success = false
-	}
+	result.SgxResult.VersionMatch = verifyQuoteVersion(sgxQuote.QuoteHeader.Version, policy.QuoteVersion)
+	result.Summary.Status = result.Summary.Status.Worse(result.SgxResult.VersionMatch.Status)
 
-	result.Summary.Status = ar.StatusFromBool(success)
+	result.Summary.Status = result.Summary.Status.Worse(ar.StatusFromBool(success))
 
-	return result, success
+	return result
 }
 
 // Parses the report into the SgxReport structure

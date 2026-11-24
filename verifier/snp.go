@@ -91,35 +91,37 @@ func VerifySnp(
 	policy *ar.SnpPolicy,
 	caFingerprints []string,
 	refComponents []ar.Component,
-) (*ar.MeasurementResult, bool) {
+) *ar.MeasurementResult {
 
 	log.Debug("Verifying SNP measurements")
 
 	result := &ar.MeasurementResult{
-		Type:      ar.TYPE_RESULT_SNP,
+		Type: ar.TYPE_RESULT_SNP,
+		Summary: ar.Result{
+			Status: ar.StatusSuccess,
+		},
 		SnpResult: &ar.SnpResult{},
 	}
-	ok := true
 
 	// Extract the SNP attestation report data structure
 	s, err := DecodeSnpReport(evidence.Data)
 	if err != nil {
 		log.Warnf("Failed to decode SNP report: %v", err)
 		result.Summary.Fail(ar.ParseEvidence)
-		return result, false
+		return result
 	}
 
 	certs, err := internal.ParseCertsDer(collateral.Certs)
 	if err != nil || len(certs) == 0 {
 		log.Warnf("Failed to parse certificates: %v", err)
 		result.Summary.Fail(ar.ParseCert)
-		return result, false
+		return result
 	}
 
 	if len(refComponents) == 0 {
 		log.Warn("Could not find SNP reference value")
 		result.Summary.Fail(ar.RefValNotPresent)
-		return result, false
+		return result
 	}
 
 	for _, ref := range refComponents {
@@ -127,34 +129,32 @@ func VerifySnp(
 		if err != nil || ta != ar.TRUST_ANCHOR_SNP {
 			log.Warnf("SNP reference value invalid trust anchor %v (err: %v)", ta, err)
 			result.Summary.Fail(ar.RefValType)
-			return result, false
+			return result
 		}
 	}
 
 	if policy == nil {
 		result.Summary.Fail(ar.PolicyNotPresent)
-		return result, false
+		return result
 	}
 
 	// Determine AMD EPYC CPU generation and fetch corresponding version policy
 	versionPolicy, codeName, err := getSnpVersionPolicy(&s, certs[0], policy)
 	if err != nil {
 		result.Summary.Fail(ar.PolicyNotPresent, err)
-		return result, false
+		return result
 	}
 
 	// Compare nonce for freshness (called report data in the SNP attestation report structure)
 	nonce64 := make([]byte, 64)
 	copy(nonce64, nonce)
 	result.Freshness = verifyNonce(s.ReportData[:], nonce64)
-	if result.Freshness.Status != ar.StatusSuccess {
-		ok = false
-	}
+	result.Summary.Status = result.Summary.Status.Worse(result.Freshness.Status)
 
 	// Verify Signature, created with SNP VCEK private key
-	sig, ret := verifySnpSignature(evidence.Data, s, certs, caFingerprints)
-	if !ret {
-		ok = false
+	sig, sigOk := verifySnpSignature(evidence.Data, s, certs, caFingerprints)
+	if !sigOk {
+		result.Summary.Status = ar.StatusFail
 	}
 	result.Signature = sig
 
@@ -186,8 +186,6 @@ func VerifySnp(
 				Launched: true,
 				HashAlg:  crypto.SHA384.String(),
 			})
-
-		ok = false
 	} else {
 		log.Debug("Successfully verified SNP reference value")
 		result.Artifacts = append(result.Artifacts,
@@ -205,64 +203,55 @@ func VerifySnp(
 	}
 
 	// Verify the SNP report version
-	result.SnpResult.VersionMatch, ret = verifySnpVersion(policy.ReportMinVersion,
+	result.SnpResult.VersionMatch = verifySnpVersion(policy.ReportMinVersion,
 		policy.ReportMaxVersion, s.Version)
-	if !ret {
-		ok = false
-	}
 	// Verify SNP VM configuration
-	result.SnpResult.PolicyCheck, ret = verifySnpPolicy(s.Policy, policy.GuestPolicy)
-	if !ret {
-		ok = false
-	}
+	result.SnpResult.PolicyCheck = verifySnpPolicy(s.Policy, policy.GuestPolicy)
 	// Verify the SNP firmware version
-	result.SnpResult.FwCheck, ret = verifySnpFw(s, versionPolicy.Fw)
-	if !ret {
-		ok = false
-	}
+	result.SnpResult.FwCheck = verifySnpFw(s, versionPolicy.Fw)
 	// Verify the SNP TCB against the specified minimum versions
-	result.SnpResult.TcbCheck, ret = verifySnpTcb(codeName, s, versionPolicy.Tcb)
-	if !ret {
-		ok = false
-	}
+	result.SnpResult.TcbCheck = verifySnpTcb(codeName, s, versionPolicy.Tcb)
 	// Examine SNP x509 extensions
-	result.SnpResult.ExtensionsCheck, ret = verifySnpExtensions(codeName, certs[0], &s)
-	if !ret {
-		ok = false
-	}
-	result.SnpResult.HostDataCheck, ret = verifySnpHostData(s.HostData[:], policy.HostData)
-	if !ret {
-		ok = false
+	var extOk bool
+	result.SnpResult.ExtensionsCheck, extOk = verifySnpExtensions(codeName, certs[0], &s)
+	result.SnpResult.HostDataCheck = verifySnpHostData(s.HostData[:], policy.HostData)
+
+	for _, status := range []ar.Status{
+		result.SnpResult.VersionMatch.Status,
+		result.SnpResult.PolicyCheck.Summary.Status,
+		ar.StatusFromBool(result.SnpResult.FwCheck.Success),
+		result.SnpResult.TcbCheck.Summary.Status,
+		ar.StatusFromBool(extOk),
+		result.SnpResult.HostDataCheck.Status,
+	} {
+		result.Summary.Status = result.Summary.Status.Worse(status)
 	}
 
-	result.Summary.Status = ar.StatusFromBool(ok)
-
-	return result, ok
+	return result
 }
 
-func verifySnpHostData(got []byte, expected []byte) (ar.Result, bool) {
+func verifySnpHostData(got []byte, expected []byte) ar.Result {
 	r := ar.Result{
 		Got:    fmt.Sprintf("%x", got),
 		Status: ar.StatusSuccess,
 	}
 	if len(expected) == 0 {
 		log.Debug("SNP HostData: no policy constraint configured")
-		return r, true
+		return r
 	}
 	r.Expected = fmt.Sprintf("%x", expected)
 	if !bytes.Equal(got, expected) {
 		log.Warnf("SNP HostData mismatch: expected %x, got %x", expected, got)
 		r.Status = ar.StatusFail
-		return r, false
+		return r
 	}
 	log.Debug("Successfully verified SNP HostData")
-	return r, true
+	return r
 }
 
-func verifySnpVersion(min, max, got uint32) (ar.Result, bool) {
+func verifySnpVersion(min, max, got uint32) ar.Result {
 	r := ar.Result{}
-	ok := (got >= min && got <= max)
-	if !ok {
+	if got < min || got > max {
 		log.Warnf("SNP report version mismatch: Report = %v, min = %v, max = %v", got, min, max)
 		r.Status = ar.StatusFail
 		r.ExpectedBetween = []string{
@@ -273,10 +262,10 @@ func verifySnpVersion(min, max, got uint32) (ar.Result, bool) {
 	} else {
 		r.Status = ar.StatusSuccess
 	}
-	return r, ok
+	return r
 }
 
-func verifySnpPolicy(policy uint64, v ar.SnpGuestPolicy) (ar.PolicyCheck, bool) {
+func verifySnpPolicy(policy uint64, v ar.SnpGuestPolicy) ar.PolicyCheck {
 
 	abiMajor := uint8(policy & 0xFF)
 	abiMinor := uint8((policy >> 8) & 0xFF)
@@ -324,10 +313,10 @@ func verifySnpPolicy(policy uint64, v ar.SnpGuestPolicy) (ar.PolicyCheck, bool) 
 	}
 	r.Summary.Status = ar.StatusFromBool(ok)
 
-	return r, ok
+	return r
 }
 
-func verifySnpFw(s snpreport, v ar.SnpFw) (ar.VersionCheck, bool) {
+func verifySnpFw(s snpreport, v ar.SnpFw) ar.VersionCheck {
 
 	build := min([]uint8{s.CurrentBuild, s.CommittedBuild})
 	major := min([]uint8{s.CurrentMajor, s.CommittedMajor})
@@ -345,10 +334,10 @@ func verifySnpFw(s snpreport, v ar.SnpFw) (ar.VersionCheck, bool) {
 		Claimed:  []int{int(v.Major), int(v.Minor), int(v.Build)},
 		Measured: []int{int(major), int(minor), int(build)},
 	}
-	return r, ok
+	return r
 }
 
-func verifySnpTcb(codeName string, s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool) {
+func verifySnpTcb(codeName string, s snpreport, v ar.SnpTcb) ar.TcbCheck {
 
 	log.Tracef("Verifying %q TCB", codeName)
 
@@ -404,7 +393,7 @@ func verifySnpTcb(codeName string, s snpreport, v ar.SnpTcb) (ar.TcbCheck, bool)
 	}
 	r.Summary.Status = ar.StatusFromBool(ok)
 
-	return r, ok
+	return r
 }
 
 func verifySnpSignature(
@@ -538,7 +527,6 @@ func oidDesc(oid string) string {
 
 func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snpreport) ([]ar.Result, bool) {
 	success := true
-	var ok bool
 	var r ar.Result
 
 	// Checked extensions depend on the key type
@@ -554,32 +542,32 @@ func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snprep
 	results := make([]ar.Result, 0)
 
 	if codeName == "Turin" {
-		if r, ok = checkExtensionUint8(cert, oidFmc, tcb.Fmc); !ok {
+		if r = checkExtensionUint8(cert, oidFmc, tcb.Fmc); r.Status != ar.StatusSuccess {
 			log.Warnf("SEV FMC extension check failed")
 			success = false
 		}
 		results = append(results, r)
 	}
 
-	if r, ok = checkExtensionUint8(cert, oidBl, tcb.Bl); !ok {
+	if r = checkExtensionUint8(cert, oidBl, tcb.Bl); r.Status != ar.StatusSuccess {
 		log.Warnf("SEV BL extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, oidTee, tcb.Tee); !ok {
+	if r = checkExtensionUint8(cert, oidTee, tcb.Tee); r.Status != ar.StatusSuccess {
 		log.Warnf("SEV TEE extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, oidSnp, tcb.Snp); !ok {
+	if r = checkExtensionUint8(cert, oidSnp, tcb.Snp); r.Status != ar.StatusSuccess {
 		log.Warnf("SEV SNP extension check failed")
 		success = false
 	}
 	results = append(results, r)
 
-	if r, ok = checkExtensionUint8(cert, oidUcode, tcb.Ucode); !ok {
+	if r = checkExtensionUint8(cert, oidUcode, tcb.Ucode); r.Status != ar.StatusSuccess {
 		log.Warnf("SEV UCODE extension check failed")
 		success = false
 	}
@@ -595,7 +583,7 @@ func verifySnpExtensions(codeName string, cert *x509.Certificate, report *snprep
 			log.Debug("set chip ID length to 8 for Turin")
 			len = 8
 		}
-		if r, ok = checkExtensionBuf(cert, oidChipId, report.ChipId[:len]); !ok {
+		if r = checkExtensionBuf(cert, oidChipId, report.ChipId[:len]); r.Status != ar.StatusSuccess {
 			log.Warnf("Chip ID extension check failed")
 			success = false
 		}
@@ -721,7 +709,7 @@ func getSnpVersionPolicy(report *snpreport, cert *x509.Certificate, policy *ar.S
 	return nil, "", fmt.Errorf("failed to find SNP policy for code name %v", codeName)
 }
 
-func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Result, bool) {
+func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) ar.Result {
 
 	for _, ext := range cert.Extensions {
 
@@ -731,13 +719,13 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 				result := ar.Result{}
 				result.Fail(ar.OidLength, fmt.Errorf("extension %v value unexpected length %v (expected 3 or 4)",
 					oid, len(ext.Value)))
-				return result, false
+				return result
 			}
 			if ext.Value[0] != 0x2 {
 				result := ar.Result{}
 				result.Fail(ar.OidTag, fmt.Errorf("extension %v value[0]: %v does not match expected value 2 (tag Integer)",
 					oid, ext.Value[0]))
-				return result, false
+				return result
 			}
 			if ext.Value[1] == 0x1 {
 				if ext.Value[2] != value {
@@ -747,7 +735,7 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 						Status:   ar.StatusFail,
 						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
 						Got:      strconv.FormatUint(uint64(ext.Value[2]), 10),
-					}, false
+					}
 				}
 			} else if ext.Value[1] == 0x2 {
 				// Due to openssl, the sign bit must remain zero for positive integers
@@ -760,29 +748,29 @@ func checkExtensionUint8(cert *x509.Certificate, oid string, value uint8) (ar.Re
 						Status:   ar.StatusFail,
 						Expected: fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
 						Got:      strconv.FormatUint(uint64(ext.Value[3]), 10),
-					}, false
+					}
 				}
 			} else {
 				result := ar.Result{}
 				result.Fail(ar.OidLength, fmt.Errorf(
 					"extension %v value[1]: %v does not match expected value 1 or 2 (length of integer)",
 					oid, ext.Value[1]))
-				return result, false
+				return result
 			}
 			return ar.Result{
 				Status: ar.StatusSuccess,
 				Got:    fmt.Sprintf("%v: %v", oidDesc(oid), strconv.FormatUint(uint64(value), 10)),
-			}, true
+			}
 		}
 	}
 
 	result := ar.Result{}
 	result.Fail(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
 
-	return result, false
+	return result
 }
 
-func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Result, bool) {
+func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) ar.Result {
 
 	for _, ext := range cert.Extensions {
 
@@ -794,18 +782,18 @@ func checkExtensionBuf(cert *x509.Certificate, oid string, buf []byte) (ar.Resul
 					Status:   ar.StatusFail,
 					Expected: fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(buf)),
 					Got:      hex.EncodeToString(ext.Value),
-				}, false
+				}
 			}
 			return ar.Result{
 				Status: ar.StatusSuccess,
 				Got:    fmt.Sprintf("%v: %v", oidDesc(oid), hex.EncodeToString(ext.Value)),
-			}, true
+			}
 		}
 	}
 
 	result := ar.Result{}
 	result.Fail(ar.OidNotPresent, fmt.Errorf("extension %v not present in certificate", oid))
-	return result, false
+	return result
 }
 
 func getExtensionString(cert *x509.Certificate, oid string) (string, bool) {
