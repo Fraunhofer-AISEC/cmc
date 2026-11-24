@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - 2025 Fraunhofer AISEC
+// Copyright (c) 2021 - 2026 Fraunhofer AISEC
 // Fraunhofer-Gesellschaft zur Foerderung der angewandten Forschung e.V.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,54 +36,6 @@ import (
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/sirupsen/logrus"
 )
-
-func Test_collectComponents(t *testing.T) {
-	type args struct {
-		metadata []ar.MetadataResult
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    map[string][]ar.Component
-		wantErr bool
-	}{
-		{
-			name: "Success",
-			args: args{
-				metadata: []ar.MetadataResult{
-					rtmManifest,
-					osManifest,
-					appManifest1,
-					appManifest2,
-				},
-			},
-			want:    refMap,
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := collectComponents(tt.args.metadata, nil)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("collectComponents() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			for wantedkey, wantedrefvals := range tt.want {
-				for _, wantedrefval := range wantedrefvals {
-					found := false
-					for _, gotrefval := range got[wantedkey] {
-						if gotrefval.Name == wantedrefval.Name {
-							found = true
-						}
-					}
-					if !found {
-						t.Errorf("collectComponents() failed to find %v", wantedrefval.Name)
-					}
-				}
-			}
-		})
-	}
-}
 
 func TestVerify(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
@@ -525,6 +477,90 @@ func TestVerify(t *testing.T) {
 	}
 }
 
+func TestAttestLevel(t *testing.T) {
+	tests := []struct {
+		name      string
+		evidences []string
+		want      ar.AttestLevel
+		covers    []string
+	}{
+		{"no evidence", nil, ar.LevelNone, nil},
+		{"sw", []string{ar.TYPE_EVIDENCE_SW}, ar.LevelSoftware, []string{ar.TRUST_ANCHOR_SW}},
+		{"tpm and sw", []string{ar.TYPE_EVIDENCE_TPM, ar.TYPE_EVIDENCE_SW}, ar.LevelHardware,
+			[]string{ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_SW}},
+		{"azure tdx", []string{ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM},
+			ar.LevelHardware, []string{ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_TPM}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var evidences []ar.Evidence
+			for _, typ := range tt.evidences {
+				evidences = append(evidences, ar.Evidence{Type: typ})
+			}
+			covered := coveredTrustAnchors(evidences)
+			if got := slices.Sorted(maps.Keys(covered)); !slices.Equal(got, slices.Sorted(slices.Values(tt.covers))) {
+				t.Errorf("coveredTrustAnchors() = %v, want %v", got, tt.covers)
+			}
+			if got := attestLevel(covered); got != tt.want {
+				t.Errorf("attestLevel() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTpmAkTrust(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "vTPM AK"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		// As created by the TPM driver for the vTPM AK
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	selfSigned, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ekuChain, _ := reissueAk(t, validAk, []asn1.ObjectIdentifier{internal.OidAkCertificate})
+	metadataCas := []*x509.Certificate{validCa}
+
+	tpm := ar.Evidence{Type: ar.TYPE_EVIDENCE_TPM}
+	snp := ar.Evidence{Type: ar.TYPE_EVIDENCE_SNP}
+	tdx := ar.Evidence{Type: ar.TYPE_EVIDENCE_TDX}
+
+	tests := []struct {
+		name        string
+		evidences   []ar.Evidence
+		certs       [][]byte
+		wantCa      string
+		wantRequire bool
+	}{
+		{"tpm primary", []ar.Evidence{tpm}, ekuChain, validCa.Subject.CommonName, true},
+		{"vtpm snp", []ar.Evidence{tpm, snp}, [][]byte{selfSigned}, "vTPM AK", false},
+		{"vtpm tdx", []ar.Evidence{tdx, tpm}, [][]byte{selfSigned}, "vTPM AK", false},
+		{"self-signed without cvm", []ar.Evidence{tpm}, [][]byte{selfSigned},
+			validCa.Subject.CommonName, true},
+		{"ca-issued with cvm", []ar.Evidence{tpm, snp}, ekuChain, validCa.Subject.CommonName, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cas, require := tpmAkTrust(tt.evidences, ar.Collateral{Certs: tt.certs}, metadataCas)
+			if len(cas) != 1 || cas[0].Subject.CommonName != tt.wantCa {
+				t.Errorf("tpmAkTrust() CAs = %v, want %v", cas, tt.wantCa)
+			}
+			if require != tt.wantRequire {
+				t.Errorf("tpmAkTrust() requireAkEku = %v, want %v", require, tt.wantRequire)
+			}
+		})
+	}
+}
+
 func Test_sortArtifacts(t *testing.T) {
 
 	measurements := []ar.MeasurementResult{
@@ -555,222 +591,8 @@ func Test_sortArtifacts(t *testing.T) {
 	}
 }
 
-func Test_checkMetadataCompatibility(t *testing.T) {
-	logrus.SetLevel(logrus.TraceLevel)
-	type args struct {
-		metadata *ar.MetadataSummary
-	}
-	tests := []struct {
-		name  string
-		args  args
-		want  ar.Status
-		want1 []ar.ErrorCode
-	}{
-		{
-			name:  "Valid Metadata",
-			want:  ar.StatusSuccess,
-			want1: []ar.ErrorCode{},
-			args: args{
-				metadata: validMetadata,
-			},
-		},
-		{
-			name:  "No Root Manifest",
-			want:  ar.StatusFail,
-			want1: []ar.ErrorCode{ar.NoRootManifest},
-			args: args{
-				metadata: noRootManifestMetadata,
-			},
-		},
-		{
-			name:  "Multiple Root Manifests",
-			want:  ar.StatusFail,
-			want1: []ar.ErrorCode{ar.MultipleRootManifests},
-			args: args{
-				metadata: multipleRootManifestMetadata,
-			},
-		},
-		{
-			name:  "Missing Manifests",
-			want:  ar.StatusFail,
-			want1: []ar.ErrorCode{},
-			args: args{
-				metadata: missingManifestMetadata,
-			},
-		},
-		{
-			name:  "Missing Manifest Description",
-			want:  ar.StatusFail,
-			want1: []ar.ErrorCode{},
-			args: args{
-				metadata: missingDescriptionMetadata,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := checkMetadataCompatibility(tt.args.metadata)
-			if got.Summary.Status != tt.want {
-				t.Errorf("checkMetadataCompatibility() got = %v, want %v", got, tt.want)
-			}
-			if len(got.Summary.ErrorCodes) != len(tt.want1) {
-				t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
-			}
-			for _, ec1 := range got.Summary.ErrorCodes {
-				found := false
-				for _, ec2 := range tt.want1 {
-					if ec1 == ec2 {
-						found = true
-						break
-					}
-				}
-				if !found {
-					t.Errorf("checkMetadataCompatibility() got1 = %v, want %v", got.Summary.ErrorCodes, tt.want1)
-				}
-			}
-		})
-	}
-}
-
-func Test_rootManifest(t *testing.T) {
-	tests := []struct {
-		name      string
-		manifests []ar.MetadataResult
-		want      string
-	}{
-		{
-			name:      "Root First",
-			manifests: []ar.MetadataResult{validRtmResult, validOsResult, validAppResult},
-			want:      validRtmResult.Name,
-		},
-		{
-			name:      "Root Last",
-			manifests: []ar.MetadataResult{validAppResult, validOsResult, validRtmResult},
-			want:      validRtmResult.Name,
-		},
-		{
-			name:      "No Root",
-			manifests: []ar.MetadataResult{validOsResult, validAppResult},
-			want:      "",
-		},
-		{
-			name:      "No Manifests",
-			manifests: nil,
-			want:      "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := rootManifest(tt.manifests); got.Name != tt.want {
-				t.Errorf("rootManifest() --GOT-- %q, --WANT-- %q", got.Name, tt.want)
-			}
-		})
-	}
-}
-
-// variables for Test_collectComponents
-var (
-	refs = []ar.Component{
-		{
-			Type: ar.TYPE_FIRMWARE,
-			Name: "TPM1",
-			Properties: []ar.Property{
-				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
-			},
-		},
-		{
-			Type: ar.TYPE_FIRMWARE,
-			Name: "TPM2",
-			Properties: []ar.Property{
-				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TPM},
-			},
-		},
-		{
-			Type: ar.TYPE_FIRMWARE,
-			Name: "SNP1",
-			Properties: []ar.Property{
-				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SNP},
-			},
-		},
-		{
-			Type: ar.TYPE_APP,
-			Name: "SW1",
-			Properties: []ar.Property{
-				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SW},
-			},
-		},
-		{
-			Type: ar.TYPE_APP,
-			Name: "SW2",
-			Properties: []ar.Property{
-				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_SW},
-			},
-		},
-	}
-
-	refMap = map[string][]ar.Component{
-		ar.TRUST_ANCHOR_TPM: refs[:2],
-		ar.TRUST_ANCHOR_SNP: {refs[2]},
-		ar.TRUST_ANCHOR_SW:  refs[3:],
-	}
-
-	rtmManifest = ar.MetadataResult{
-		Metadata: ar.Metadata{
-			Manifest: ar.Manifest{
-				Sbom: &ar.Sbom{
-					Components: []ar.Component{
-						refs[0],
-						refs[2],
-					},
-				},
-			},
-		},
-	}
-
-	osManifest = ar.MetadataResult{
-		Metadata: ar.Metadata{
-			Manifest: ar.Manifest{
-				Sbom: &ar.Sbom{
-					Components: []ar.Component{
-						refs[1],
-					},
-				},
-			},
-		},
-	}
-
-	appManifest1 = ar.MetadataResult{
-		Metadata: ar.Metadata{
-			Manifest: ar.Manifest{
-				Sbom: &ar.Sbom{
-					Components: []ar.Component{refs[3]},
-				},
-			},
-		},
-	}
-
-	appManifest2 = ar.MetadataResult{
-		Metadata: ar.Metadata{
-			Manifest: ar.Manifest{
-				Sbom: &ar.Sbom{
-					Components: []ar.Component{refs[4]},
-				},
-			},
-		},
-	}
-)
-
 // variables for TestVerify & Test_checkMetadataCompatibility
 var (
-	validCompanyDescription = ar.Metadata{
-		MetaInfo: ar.MetaInfo{
-			Type: ar.TYPE_COMPANY_DESCRIPTION,
-			Name: "Test Company Description",
-		},
-	}
-
 	validRtmManifestDescription = ar.ManifestDescription{
 		Type:     ar.TYPE_MANIFEST_DESCRIPTION,
 		Name:     " Test RTM Manifest Description",
@@ -886,17 +708,6 @@ var (
 		},
 	}
 
-	incompleteImageDescription = ar.Metadata{
-		MetaInfo: validMetaInfo,
-		ImageDescription: ar.ImageDescription{
-			Location: "Munich, Germany",
-			Descriptions: []ar.ManifestDescription{
-				validRtmManifestDescription,
-				validOsManifestDescription,
-			},
-		},
-	}
-
 	invalidImageDescription = ar.Metadata{
 		MetaInfo: ar.MetaInfo{
 			Type:    ar.TYPE_IMAGE_DESCRIPTION,
@@ -935,82 +746,6 @@ var (
 					NextUpdate:   "2030-04-01T20:00:00Z",
 				},
 			},
-		},
-	}
-)
-
-// Variables for Test_checkMetadataCompatibility
-var (
-	validImageDescriptionResult = ar.MetadataResult{
-		Metadata: validImageDescription,
-	}
-
-	incompleteImageDescriptionResult = ar.MetadataResult{
-		Metadata: incompleteImageDescription,
-	}
-
-	validCompDescResult = &ar.MetadataResult{
-		Metadata: validCompanyDescription,
-	}
-
-	validRtmResult = ar.MetadataResult{
-		Metadata: validRtmManifest,
-	}
-
-	validOsResult = ar.MetadataResult{
-		Metadata: validOsManifest,
-	}
-
-	validAppResult = ar.MetadataResult{
-		Metadata: validAppManifest,
-	}
-
-	validMetadata = &ar.MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []ar.MetadataResult{
-			validRtmResult,
-			validOsResult,
-			validAppResult,
-		},
-	}
-
-	noRootManifestMetadata = &ar.MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []ar.MetadataResult{
-			validOsResult,
-			validAppResult,
-		},
-	}
-
-	multipleRootManifestMetadata = &ar.MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []ar.MetadataResult{
-			validRtmResult,
-			validRtmResult,
-			validOsResult,
-			validAppResult,
-		},
-	}
-
-	missingManifestMetadata = &ar.MetadataSummary{
-		ImageDescriptionResult:   validImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []ar.MetadataResult{
-			validRtmResult,
-			validOsResult,
-		},
-	}
-
-	missingDescriptionMetadata = &ar.MetadataSummary{
-		ImageDescriptionResult:   incompleteImageDescriptionResult,
-		CompanyDescriptionResult: validCompDescResult,
-		ManifestResults: []ar.MetadataResult{
-			validRtmResult,
-			validOsResult,
-			validAppResult,
 		},
 	}
 )
@@ -1113,88 +848,4 @@ func tdxComponent(optional bool) []ar.Component {
 			{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TDX},
 		},
 	}}
-}
-
-func TestAttestLevel(t *testing.T) {
-	tests := []struct {
-		name      string
-		evidences []string
-		want      ar.AttestLevel
-		covers    []string
-	}{
-		{"no evidence", nil, ar.LevelNone, nil},
-		{"sw", []string{ar.TYPE_EVIDENCE_SW}, ar.LevelSoftware, []string{ar.TRUST_ANCHOR_SW}},
-		{"tpm and sw", []string{ar.TYPE_EVIDENCE_TPM, ar.TYPE_EVIDENCE_SW}, ar.LevelHardware,
-			[]string{ar.TRUST_ANCHOR_TPM, ar.TRUST_ANCHOR_SW}},
-		{"azure tdx", []string{ar.TYPE_EVIDENCE_AZURE_TDX, ar.TYPE_EVIDENCE_AZURE_TPM},
-			ar.LevelHardware, []string{ar.TRUST_ANCHOR_TDX, ar.TRUST_ANCHOR_TPM}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var evidences []ar.Evidence
-			for _, typ := range tt.evidences {
-				evidences = append(evidences, ar.Evidence{Type: typ})
-			}
-			covered := coveredTrustAnchors(evidences)
-			if got := slices.Sorted(maps.Keys(covered)); !slices.Equal(got, slices.Sorted(slices.Values(tt.covers))) {
-				t.Errorf("coveredTrustAnchors() = %v, want %v", got, tt.covers)
-			}
-			if got := attestLevel(covered); got != tt.want {
-				t.Errorf("attestLevel() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestTpmAkTrust(t *testing.T) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(1),
-		Subject:      pkix.Name{CommonName: "vTPM AK"},
-		NotBefore:    time.Now().Add(-time.Hour),
-		NotAfter:     time.Now().Add(time.Hour),
-		// As created by the TPM driver for the vTPM AK
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-	}
-	selfSigned, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ekuChain, _ := reissueAk(t, validAk, []asn1.ObjectIdentifier{internal.OidAkCertificate})
-	metadataCas := []*x509.Certificate{validCa}
-
-	tpm := ar.Evidence{Type: ar.TYPE_EVIDENCE_TPM}
-	snp := ar.Evidence{Type: ar.TYPE_EVIDENCE_SNP}
-	tdx := ar.Evidence{Type: ar.TYPE_EVIDENCE_TDX}
-
-	tests := []struct {
-		name        string
-		evidences   []ar.Evidence
-		certs       [][]byte
-		wantCa      string
-		wantRequire bool
-	}{
-		{"tpm primary", []ar.Evidence{tpm}, ekuChain, validCa.Subject.CommonName, true},
-		{"vtpm snp", []ar.Evidence{tpm, snp}, [][]byte{selfSigned}, "vTPM AK", false},
-		{"vtpm tdx", []ar.Evidence{tdx, tpm}, [][]byte{selfSigned}, "vTPM AK", false},
-		{"self-signed without cvm", []ar.Evidence{tpm}, [][]byte{selfSigned},
-			validCa.Subject.CommonName, true},
-		{"ca-issued with cvm", []ar.Evidence{tpm, snp}, ekuChain, validCa.Subject.CommonName, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cas, require := tpmAkTrust(tt.evidences, ar.Collateral{Certs: tt.certs}, metadataCas)
-			if len(cas) != 1 || cas[0].Subject.CommonName != tt.wantCa {
-				t.Errorf("tpmAkTrust() CAs = %v, want %v", cas, tt.wantCa)
-			}
-			if require != tt.wantRequire {
-				t.Errorf("tpmAkTrust() requireAkEku = %v, want %v", require, tt.wantRequire)
-			}
-		})
-	}
 }
