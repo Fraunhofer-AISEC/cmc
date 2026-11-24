@@ -21,6 +21,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/Fraunhofer-AISEC/cmc/rvps/store/fs"
+	"github.com/Fraunhofer-AISEC/cmc/rvps/store/sqlite"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v3"
 )
@@ -40,15 +42,20 @@ func main() {
 				return err
 			}
 
-			// Create or open the database
-			db, err := NewDatabase(c.DbPath)
+			// Create or open the index and the blob store
+			index, err := sqlite.NewSQLiteIndex(c.DbPath)
 			if err != nil {
 				return err
 			}
-			defer db.Close()
+			defer index.Close()
+			blobs, err := fs.NewFileSystemStore(c.BlobPath)
+			if err != nil {
+				return err
+			}
+			defer blobs.Close()
 
 			// Run the server until the context is cancelled
-			return RunServer(ctx, db, c.MetadataCAs, c.Address, c.tlsKey, c.tlsCaChain)
+			return RunServer(ctx, index, blobs, c.MetadataCAs, c.Address, c.tlsKey, c.tlsCaChain)
 		},
 	}
 

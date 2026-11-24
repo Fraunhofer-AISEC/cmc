@@ -32,6 +32,7 @@ import (
 
 type config struct {
 	DbPath      string
+	BlobPath    string
 	Address     string
 	LogLevel    string
 	MetadataCAs []*x509.Certificate
@@ -41,6 +42,7 @@ type config struct {
 
 const (
 	flagDbPath     = "db"
+	flagBlobPath   = "blobs"
 	flagAddress    = "addr"
 	flagMetadataCA = "ca"
 	flagLogLevel   = "log"
@@ -62,7 +64,12 @@ var (
 	flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:     flagDbPath,
-			Usage:    "SQLite3 database path, contents are considered trusted",
+			Usage:    "SQLite3 index database path, contents are considered trusted",
+			Required: true,
+		},
+		&cli.StringFlag{
+			Name:     flagBlobPath,
+			Usage:    "directory of the metadata blob store, contents are considered trusted",
 			Required: true,
 		},
 		&cli.StringFlag{
@@ -101,11 +108,16 @@ func fetchConfig(cmd *cli.Command) (*config, error) {
 	}
 	log.SetLevel(level)
 
-	// parse and validate the db path and listen address (presence enforced by cli)
+	// parse and validate the db path, blob path and listen address (presence enforced by cli)
 	if path, err := filepath.Abs(cmd.String(flagDbPath)); err != nil {
 		return nil, fmt.Errorf("failed to resolve database path: %w", err)
 	} else {
 		cfg.DbPath = path
+	}
+	if path, err := filepath.Abs(cmd.String(flagBlobPath)); err != nil {
+		return nil, fmt.Errorf("failed to resolve blob store path: %w", err)
+	} else {
+		cfg.BlobPath = path
 	}
 	cfg.Address = cmd.String(flagAddress)
 

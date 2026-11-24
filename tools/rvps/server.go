@@ -25,14 +25,18 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Fraunhofer-AISEC/cmc/rvps/api"
+	"github.com/Fraunhofer-AISEC/cmc/rvps/store"
 	log "github.com/sirupsen/logrus"
 )
 
 type Server struct {
-	database    *Database
+	index       store.Index
+	blobs       store.BlobStore
 	metadataCAs []*x509.Certificate
 }
 
@@ -41,8 +45,8 @@ const (
 	serverTimeout = 60 * time.Second
 )
 
-func RunServer(ctx context.Context, db *Database, metadataCAs []*x509.Certificate, addr string, tlsKey crypto.PrivateKey, tlsCaChain []*x509.Certificate) error {
-	s := &Server{database: db, metadataCAs: metadataCAs}
+func RunServer(ctx context.Context, index store.Index, blobs store.BlobStore, metadataCAs []*x509.Certificate, addr string, tlsKey crypto.PrivateKey, tlsCaChain []*x509.Certificate) error {
+	s := &Server{index: index, blobs: blobs, metadataCAs: metadataCAs}
 
 	// configure the tls parameter
 	var tlsUnpackedChain [][]byte
@@ -112,9 +116,9 @@ func (s *Server) handleDispatch(req *http.Request, resp http.ResponseWriter) {
 	case req.Method == "POST" && req.URL.Path == "/query":
 		s.handleQuery(req, resp)
 	case req.Method == "GET" && strings.HasPrefix(req.URL.Path, "/metadata/"):
-		s.handleFetchId(resp, strings.TrimPrefix(req.URL.Path, "/metadata/"))
+		s.handleFetchId(req, resp, strings.TrimPrefix(req.URL.Path, "/metadata/"))
 	case req.Method == "GET" && kindOk:
-		s.handleFetchName(resp, kind, name)
+		s.handleFetchName(req, resp, kind, name)
 	default:
 		resp.WriteHeader(http.StatusNotFound)
 		fmt.Fprintf(resp, "Resource [%v] not found", req.URL.Path)
@@ -161,6 +165,7 @@ func handleSendEntry(resp http.ResponseWriter, what string, entry *MetadataFull)
 	resp.Header().Set("X-Metadata-Name", entry.Info.Name)
 	resp.Header().Set("X-Metadata-Type", entry.Info.Type)
 	resp.Header().Set("X-Metadata-Version", entry.Info.Version)
+	resp.Header().Set("X-Metadata-Signer", entry.Info.Signer)
 	resp.Header().Set("Content-Type", contentType)
 	resp.WriteHeader(http.StatusOK)
 	resp.Write(entry.Raw)
@@ -194,12 +199,26 @@ func handleReadUpload(req *http.Request, resp http.ResponseWriter, contentType s
 }
 func (s *Server) handleEnumerate(req *http.Request, resp http.ResponseWriter) {
 	query := req.URL.Query()
-	kind, name := query.Get("type"), query.Get("name")
-	log.Tracef("Enumeration for [type: %v] [name: %v]", kind, name)
+	kind, name, signer := query.Get("type"), query.Get("name"), strings.ToLower(query.Get("signer"))
+	log.Tracef("Enumeration for [type: %v] [name: %v] [signer: %v] [offset: %v]", kind, name, signer, query.Get("offset"))
 
-	// validate the name formatting and resolve the type
+	// parse the optional offset into the listing
+	offset := uint64(0)
+	if raw := query.Get("offset"); raw != "" {
+		var err error
+		if offset, err = strconv.ParseUint(raw, 10, 32); err != nil {
+			handleBadRequest(resp, "malformed offset (%v)", raw)
+			return
+		}
+	}
+
+	// validate the name and signer formatting and resolve the type
 	if name != "" && !RegexNameCheck.MatchString(name) {
 		handleBadRequest(resp, "malformed name (%v)", name)
+		return
+	}
+	if signer != "" && !RegexHashCheck.MatchString(signer) {
+		handleBadRequest(resp, "malformed signer (%v)", signer)
 		return
 	}
 	if kind != "" {
@@ -211,8 +230,8 @@ func (s *Server) handleEnumerate(req *http.Request, resp http.ResponseWriter) {
 		}
 	}
 
-	// query the database for the information
-	entries, err := s.database.Enumerate(kind, name)
+	// query the index for the information
+	entries, err := s.index.List(req.Context(), store.Filter{Kind: kind, Name: name, Signer: signer}, uint(offset))
 	if err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to enumerate metadata: %v", err))
 		return
@@ -247,21 +266,26 @@ func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
 		return
 	}
 
-	// try to insert the parsed entry into the database
+	// convert the parsed entry to its index representation
 	entry.Info.Created = time.Now().UTC().Format(time.RFC3339)
-	dbEntry, err := StoreMetadata(entry)
+	indexEntry, err := StoreMetadata(entry)
 	if err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to convert metadata: %v", err))
 		return
 	}
-	hashes, manifests := ReferenceHashes(entry), ReferenceManifests(entry)
-	inserted, err := s.database.Insert(dbEntry, hashes, manifests)
+
+	// write the blob first, as blob without index is harmless, but an index must point at a valid blob
+	if err := s.blobs.Put(req.Context(), entry.Info.Id, entry.Raw); err != nil {
+		handleInternalError(resp, fmt.Sprintf("failed to store metadata blob: %v", err))
+		return
+	}
+	inserted, err := s.index.Insert(req.Context(), *indexEntry)
 	if err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to insert metadata: %v", err))
 		return
 	}
 
-	// check if the data could not be inserted as they are already in the database
+	// check if the data could not be inserted as they are already in the index
 	if !inserted {
 		msg := fmt.Sprintf("Metadata %v %v with id %v already exist", entry.Info.Type, entry.Info.Name, entry.Info.Id)
 		log.Debug(msg)
@@ -273,12 +297,12 @@ func (s *Server) handleUpload(req *http.Request, resp http.ResponseWriter) {
 	}
 
 	// return the successful insertion
-	log.Infof("Inserted %v %v version %v (id %v) with %v reference hashes and %v referenced manifests into the database",
-		entry.Info.Type, entry.Info.Name, entry.Info.Version, entry.Info.Id, len(hashes), len(manifests))
+	log.Infof("Inserted %v %v version %v (id %v) into the index", entry.Info.Type, entry.Info.Name, entry.Info.Version, entry.Info.Id)
 	resp.Header().Set("X-Metadata-Id", entry.Info.Id)
 	resp.Header().Set("X-Metadata-Name", entry.Info.Name)
 	resp.Header().Set("X-Metadata-Type", entry.Info.Type)
 	resp.Header().Set("X-Metadata-Version", entry.Info.Version)
+	resp.Header().Set("X-Metadata-Signer", entry.Info.Signer)
 	resp.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	resp.WriteHeader(http.StatusOK)
 	fmt.Fprintf(resp, "Metadata %v (id: %v) inserted", entry.Info.Name, entry.Info.Id)
@@ -291,15 +315,15 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 	if body == nil {
 		return
 	}
-	queryRequest := &QueryRequest{}
+	queryRequest := &api.QueryRequest{}
 	if err := json.Unmarshal(body, queryRequest); err != nil {
 		handleBadRequest(resp, "malformed request body: %v", err)
 		return
 	}
 
 	// validate the consistency and version of the request and sanitize the inputs
-	if queryRequest.Version != ApiVersion {
-		handleBadRequest(resp, "unsupported API version [%v] only %v supported", queryRequest.Version, ApiVersion)
+	if queryRequest.Version != api.Version {
+		handleBadRequest(resp, "unsupported API version [%v] only %v supported", queryRequest.Version, api.Version)
 		return
 	}
 	for _, id := range queryRequest.Ids {
@@ -320,16 +344,16 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 			queryRequest.Names[i].Type = resolved
 		}
 	}
-	queryResponse, resolver := &QueryResponse{
-		Version:  ApiVersion,
-		Metadata: make(map[string]QueryMetadataEntry),
+	queryResponse, resolver := &api.QueryResponse{
+		Version:  api.Version,
+		Metadata: make(map[string]api.QueryMetadataEntry),
 	}, NewMetadataResolver()
 
 	// load all of the requested ids
 	for _, id := range queryRequest.Ids {
 		log.Tracef("Fetching metadata by id: %v", id)
 
-		entry, err := s.unpackById(id)
+		entry, err := s.unpackById(req.Context(), id)
 		if err != nil {
 			handleInternalError(resp, fmt.Sprintf("failed to fetch metadata by id (%v): %v", id, err))
 			return
@@ -344,14 +368,14 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 	for _, name := range queryRequest.Names {
 		log.Tracef("Fetching metadata by name: %v | type: %v", name.Name, name.Type)
 
-		entry, err := s.unpackByName(name.Name, name.Type)
+		entry, err := s.unpackByName(req.Context(), name.Name, name.Type, nil)
 		if err != nil {
 			handleInternalError(resp, fmt.Sprintf("failed to fetch metadata by name (%v %v): %v", name.Type, name.Name, err))
 			return
 		}
 		if !resolver.AddLoaded(name.Name, name.Type, entry) {
 			log.Tracef("Metadata (name: %v | type: %v) is missing", name.Name, name.Type)
-			queryResponse.UnknownNames = append(queryResponse.UnknownNames, QueryNameEntry{Name: name.Name, Type: name.Type})
+			queryResponse.UnknownNames = append(queryResponse.UnknownNames, api.QueryNameEntry{Name: name.Name, Type: name.Type})
 		}
 	}
 
@@ -362,7 +386,7 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 				log.Tracef("Fetching resolved metadata by name: %v | type: %v", missing.Name, missing.Type)
 
 				// perform the actual fetch of the resource
-				entry, err := s.unpackByName(missing.Name, missing.Type)
+				entry, err := s.unpackByName(req.Context(), missing.Name, missing.Type, nil)
 				if err != nil {
 					handleInternalError(resp, fmt.Sprintf("failed to fetch metadata by name (%v %v): %v", missing.Type, missing.Name, err))
 					return
@@ -371,7 +395,7 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 				// check if the entry could actually be resolved
 				if !resolver.AddLoaded(missing.Name, missing.Type, entry) {
 					log.Tracef("Resolved metadata (name: %v | type: %v) is missing", missing.Name, missing.Type)
-					queryResponse.UnknownNames = append(queryResponse.UnknownNames, QueryNameEntry{Name: missing.Name, Type: missing.Type})
+					queryResponse.UnknownNames = append(queryResponse.UnknownNames, api.QueryNameEntry{Name: missing.Name, Type: missing.Type})
 				}
 			}
 		}
@@ -381,7 +405,7 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 
 	// write all resolved entries to the response
 	for id, entry := range resolver.Entries {
-		queryResponse.Metadata[id] = QueryMetadataEntry{
+		queryResponse.Metadata[id] = api.QueryMetadataEntry{
 			Name:    entry.Info.Name,
 			Type:    entry.Info.Type,
 			Version: entry.Info.Version,
@@ -394,7 +418,7 @@ func (s *Server) handleQuery(req *http.Request, resp http.ResponseWriter) {
 	resp.WriteHeader(http.StatusOK)
 	json.NewEncoder(resp).Encode(queryResponse)
 }
-func (s *Server) handleFetchId(resp http.ResponseWriter, id string) {
+func (s *Server) handleFetchId(req *http.Request, resp http.ResponseWriter, id string) {
 	log.Tracef("Fetching metadata for [id: %v]", id)
 
 	// validate the id formatting
@@ -403,8 +427,8 @@ func (s *Server) handleFetchId(resp http.ResponseWriter, id string) {
 		return
 	}
 
-	// query the database for the entry (ids are stored in lowercase)
-	entry, err := s.unpackById(id)
+	// query the store for the entry (ids are stored in lowercase)
+	entry, err := s.unpackById(req.Context(), id)
 	if err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to fetch metadata by id: %v", err))
 		return
@@ -413,17 +437,27 @@ func (s *Server) handleFetchId(resp http.ResponseWriter, id string) {
 	// send the entry (will automatically account for not-found)
 	handleSendEntry(resp, fmt.Sprintf("id (%v)", id), entry)
 }
-func (s *Server) handleFetchName(resp http.ResponseWriter, kind, name string) {
-	log.Tracef("Fetching metadata for [name: %v] [type: %v]", name, kind)
+func (s *Server) handleFetchName(req *http.Request, resp http.ResponseWriter, kind, name string) {
+	query := req.URL.Query()
+	log.Tracef("Fetching metadata for [name: %v] [type: %v] [signer: %v]", name, kind, query.Get("signer"))
+	var signer *string
 
-	// validate the name formatting
+	// validate the name and optional signer formatting
 	if !RegexNameCheck.MatchString(name) {
 		handleBadRequest(resp, "malformed name (%v)", name)
 		return
 	}
+	if query.Has("signer") {
+		value := strings.ToLower(query.Get("signer"))
+		if !RegexHashCheck.MatchString(value) {
+			handleBadRequest(resp, "malformed signer (%v)", value)
+			return
+		}
+		signer = &value
+	}
 
-	// query the database for the entry
-	entry, err := s.unpackByName(name, kind)
+	// query the store for the entry
+	entry, err := s.unpackByName(req.Context(), name, kind, signer)
 	if err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to fetch metadata by name: %v", err))
 		return
@@ -433,17 +467,33 @@ func (s *Server) handleFetchName(resp http.ResponseWriter, kind, name string) {
 	handleSendEntry(resp, fmt.Sprintf("name (%v)", name), entry)
 }
 
-func (s *Server) unpackById(id string) (*MetadataFull, error) {
-	dbEntry, err := s.database.FetchById(strings.ToLower(id))
+func (s *Server) unpackById(ctx context.Context, id string) (*MetadataFull, error) {
+	info, err := s.index.ByID(ctx, strings.ToLower(id))
 	if err != nil {
 		return nil, err
 	}
-	return LoadMetadata(dbEntry)
+	return s.unpackEntry(ctx, info)
 }
-func (s *Server) unpackByName(name, kind string) (*MetadataFull, error) {
-	dbEntry, err := s.database.FetchByName(name, kind)
+func (s *Server) unpackByName(ctx context.Context, name, kind string, signer *string) (*MetadataFull, error) {
+	info, err := s.index.Latest(ctx, kind, name, signer)
 	if err != nil {
 		return nil, err
 	}
-	return LoadMetadata(dbEntry)
+	return s.unpackEntry(ctx, info)
+}
+func (s *Server) unpackEntry(ctx context.Context, info *store.EntryInfo) (*MetadataFull, error) {
+	// check if the index does not know the entry
+	if info == nil {
+		return nil, nil
+	}
+
+	// fetch the blob referenced by the index entry
+	raw, err := s.blobs.Get(ctx, info.Id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch metadata blob (id %v): %w", info.Id, err)
+	}
+	if raw == nil {
+		return nil, fmt.Errorf("metadata blob (id %v) is referenced by the index but missing in the blob store", info.Id)
+	}
+	return LoadMetadata(info, raw)
 }

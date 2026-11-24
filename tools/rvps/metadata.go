@@ -19,12 +19,14 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/rvps/store"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -33,6 +35,7 @@ type MetadataInfo struct {
 	Type    string `json:"type"`
 	Name    string `json:"name"`
 	Version string `json:"version"`
+	Signer  string `json:"signer"`
 	Created string `json:"created"`
 }
 
@@ -78,6 +81,7 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataFull, error) {
 
 	// check if ca's were provided and use them to verify the payload (otherwise just assume it to be valid)
 	var payload []byte
+	signer := ""
 	if len(cas) > 0 {
 		if res, data, ok := serializer.Verify(raw, cas); !ok {
 			// collect all relevant error information
@@ -101,6 +105,9 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataFull, error) {
 			return nil, fmt.Errorf("failed to verify signature: %v", strings.Join(parts, ", "))
 		} else {
 			payload = data
+			if signer, err = ExtractSigner(&res); err != nil {
+				return nil, fmt.Errorf("failed to extract signer: %w", err)
+			}
 		}
 	} else {
 		payload, err = serializer.GetPayload(raw)
@@ -133,28 +140,50 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataFull, error) {
 		return nil, fmt.Errorf("%v %v has malformed id (%v)", meta.Type, meta.Name, id)
 	}
 
-	// assemble the new parsed metadata structure (leave creation time empty, will be populated by caller)
+	// assemble the new parsed metadata structure (leave creation time empty, will be populated by
+	// caller, the signer is only known if signatures have been verified otherwise leave it empty)
 	entry := &MetadataFull{
 		Info: MetadataInfo{
 			Id:      id,
 			Type:    meta.Type,
 			Name:    meta.Name,
 			Version: meta.Version,
+			Signer:  signer,
 			Created: "",
 		},
 		Format: strings.ToLower(serializer.String()),
 		Raw:    raw,
 		parsed: meta,
 	}
-	log.Debugf("Parsed %v %v (id %v; version %v)", entry.Info.Type, entry.Info.Name, entry.Info.Id, entry.Info.Version)
+	log.Debugf("Parsed %v %v (id %v; version %v; signer %v)", entry.Info.Type, entry.Info.Name, entry.Info.Id, entry.Info.Version, entry.Info.Signer)
 	return entry, nil
 }
-func LoadMetadata(entry *DatabaseEntry) (*MetadataFull, error) {
-	// parse and unpack the database metadata
+func ExtractSigner(res *ar.MetadataResult) (string, error) {
+	if len(res.SignatureCheck) == 0 {
+		return "", fmt.Errorf("no signatures found")
+	}
+	if len(res.SignatureCheck) > 1 {
+		log.Warnf("Metadata has %v signatures, only the first one is tracked as signer", len(res.SignatureCheck))
+	}
+
+	// the validated chains start with the leaf certificate (all chains of a signature share the same leaf)
+	chains := res.SignatureCheck[0].Certs
+	if len(chains) == 0 || len(chains[0]) == 0 {
+		return "", fmt.Errorf("no validated certificate chain found")
+	}
+	block, _ := pem.Decode([]byte(chains[0][0].PublicKey))
+	if block == nil {
+		return "", fmt.Errorf("failed to decode public key of signing certificate")
+	}
+	digest := sha256.Sum256(block.Bytes)
+	return hex.EncodeToString(digest[:]), nil
+}
+func LoadMetadata(entry *store.EntryInfo, raw []byte) (*MetadataFull, error) {
+	// parse and unpack the stored metadata
 	if entry == nil {
 		return nil, nil
 	}
-	full, err := ParseMetadata(entry.Raw, nil)
+	full, err := ParseMetadata(raw, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse stored metadata (id %v): %w", entry.Id, err)
 	}
@@ -164,71 +193,35 @@ func LoadMetadata(entry *DatabaseEntry) (*MetadataFull, error) {
 		return nil, fmt.Errorf("stored metadata (id %v) is inconsistent with its raw data (id %v | %v %v %v)",
 			entry.Id, full.Info.Id, full.Info.Type, full.Info.Name, full.Info.Version)
 	}
+	full.Info.Signer = entry.Signer
 	full.Info.Created = entry.Created
 	return full, nil
 }
-func LoadMetadataInfo(entry *DatabaseInfo) MetadataInfo {
+func LoadMetadataInfo(entry *store.EntryInfo) MetadataInfo {
 	return MetadataInfo{
 		Id:      entry.Id,
 		Type:    entry.Type,
 		Name:    entry.Name,
 		Version: entry.Version,
+		Signer:  entry.Signer,
 		Created: entry.Created,
 	}
 }
-func StoreMetadata(entry *MetadataFull) (*DatabaseEntry, error) {
+func StoreMetadata(entry *MetadataFull) (*store.EntryInfo, error) {
 	versionTime, err := time.Parse(time.RFC3339, entry.Info.Version)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse version time: %w", err)
 	}
-	return &DatabaseEntry{
-		DatabaseInfo: DatabaseInfo{
-			Id:          entry.Info.Id,
-			Type:        entry.Info.Type,
-			Name:        entry.Info.Name,
-			Version:     entry.Info.Version,
-			VersionTime: versionTime.UnixNano(),
-			Created:     entry.Info.Created,
-		},
-		Raw: entry.Raw,
+	return &store.EntryInfo{
+		Id:          entry.Info.Id,
+		Type:        entry.Info.Type,
+		Name:        entry.Info.Name,
+		Version:     entry.Info.Version,
+		VersionTime: versionTime.UnixNano(),
+		Signer:      entry.Info.Signer,
+		Format:      entry.Format,
+		Created:     entry.Info.Created,
 	}, nil
-}
-
-func ReferenceHashes(entry *MetadataFull) []DatabaseHash {
-	if entry.Info.Type != ar.TYPE_MANIFEST || entry.parsed.Sbom == nil {
-		return nil
-	}
-	seen, hashes := make(map[DatabaseHash]bool), make([]DatabaseHash, 0)
-
-	// collect all of the hashes over the components of this manifest
-	for _, component := range entry.parsed.Sbom.Components {
-		for _, h := range component.Hashes {
-			if len(h.Content) == 0 {
-				continue
-			}
-			hash := DatabaseHash{Algorithm: strings.ToLower(h.Alg), Hash: strings.ToLower(hex.EncodeToString(h.Content))}
-			if !seen[hash] {
-				seen[hash] = true
-				hashes = append(hashes, hash)
-			}
-		}
-	}
-	return hashes
-}
-func ReferenceManifests(entry *MetadataFull) []string {
-	if entry.Info.Type != ar.TYPE_IMAGE_DESCRIPTION {
-		return nil
-	}
-	seen, names := make(map[string]bool), make([]string, 0, len(entry.parsed.Descriptions))
-
-	// collect all of the manifests referenced
-	for _, desc := range entry.parsed.Descriptions {
-		if desc.Manifest != "" && !seen[desc.Manifest] {
-			seen[desc.Manifest] = true
-			names = append(names, desc.Manifest)
-		}
-	}
-	return names
 }
 
 type MetadataNameIdentifier struct {

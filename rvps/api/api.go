@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package api
 
-const ApiVersion = "0.1.0"
+const Version = "0.1.0"
 
 type QueryNameEntry struct {
 	Name string `json:"name"`
