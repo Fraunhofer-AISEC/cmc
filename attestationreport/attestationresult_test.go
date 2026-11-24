@@ -34,3 +34,31 @@ func TestResultDetailsAccumulate(t *testing.T) {
 		t.Errorf("unexpected status %v", r.Status)
 	}
 }
+
+func TestAttestationResultDetailsAccumulate(t *testing.T) {
+	var r AttestationResult
+	r.Fail(VerifyMetadata, errors.New("first"), nil, errors.New("second"))
+	r.Warn(NotSpecified, errors.New("third"))
+
+	if r.Summary.Details != "first; second; third" {
+		t.Errorf("unexpected details %q", r.Summary.Details)
+	}
+	if len(r.Summary.ErrorCodes) != 1 || r.Summary.ErrorCodes[0] != VerifyMetadata {
+		t.Errorf("unexpected error codes %v", r.Summary.ErrorCodes)
+	}
+	if r.Summary.Status != StatusFail {
+		t.Errorf("unexpected status %v", r.Summary.Status)
+	}
+}
+
+func TestStatusWorse(t *testing.T) {
+	all := []Status{"", StatusSuccess, StatusWarn, StatusFail}
+	for i, a := range all {
+		for j, b := range all {
+			want := all[max(i, j)]
+			if got := a.Worse(b); got != want {
+				t.Errorf("%q.Worse(%q) = %q, want %q", a, b, got, want)
+			}
+		}
+	}
+}
