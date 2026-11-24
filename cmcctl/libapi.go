@@ -78,9 +78,15 @@ func (a LibApi) verify(c *Config) error {
 
 	// Verify the attestation report
 	log.Debug("Verifier: verifying attestation report")
-	resp := verifier.Verify(report, nonce, c.policies, c.cmc.PolicyEngineSelect,
-		c.cmc.PolicyOverwrite, c.cmc.RootCas, c.cmc.PeerCache, "", "",
-		c.cmc.Metadata.Omsp.Enabled, c.cmc.LocalRole)
+	resp := verifier.Verify(report, nonce, verifier.VerifyOptions{
+		Policies:        c.policies,
+		PolicyEngine:    c.cmc.PolicyEngineSelect,
+		PolicyOverwrite: c.cmc.PolicyOverwrite,
+		MetadataCas:     c.cmc.RootCas,
+		PeerCache:       c.cmc.PeerCache,
+		CheckOmsp:       c.cmc.Metadata.Omsp.Enabled,
+		LocalRole:       c.cmc.LocalRole,
+	})
 
 	hostname, _ := internal.Fqdn()
 	resp.Verifier = ar.Endpoint{Hostname: hostname}

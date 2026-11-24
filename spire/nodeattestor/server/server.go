@@ -182,7 +182,12 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 		return status.Error(codes.InvalidArgument, "missing attestation report")
 	}
 
-	result := verifier.VerifyBootstrap(report, nonce, c.policies, c.policyEngine, false, c.rootCas)
+	result := verifier.Verify(report, nonce, verifier.VerifyOptions{
+		Policies:     c.policies,
+		PolicyEngine: c.policyEngine,
+		MetadataCas:  c.rootCas,
+		SkipPeerAuth: true,
+	})
 
 	attrs, err := agentAttributes(c.trustDomain, result)
 	if err != nil {
