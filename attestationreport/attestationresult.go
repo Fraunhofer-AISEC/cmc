@@ -148,7 +148,7 @@ type MetadataResult struct {
 	Summary          Result            `json:"summary" cbor:"40,keyasint"`
 	ValidityCheck    Result            `json:"validityCheck,omitzero" cbor:"41,keyasint,omitzero"`
 	SignatureCheck   []SignatureResult `json:"signatureValidation,omitempty" cbor:"42,keyasint,omitempty"`
-	ManifestHash     string            `json:"manifestHash,omitempty" cbor:"50,keyasint,omitempty"`
+	Digest           string            `json:"digest,omitempty" cbor:"50,keyasint,omitempty"`
 	OmspValidity     *Result           `json:"omspValidity,omitempty" cbor:"51,keyasint,omitempty"`
 	OmspStatus       *Result           `json:"omspStatus,omitempty" cbor:"52,keyasint,omitempty"`
 	RevocationTime   string            `json:"revocationTime,omitempty" cbor:"53,keyasint,omitempty"`
@@ -653,6 +653,9 @@ const (
 	LocalRoleUnknown            ErrorCode = 92
 	PcrSelectionNoMatch         ErrorCode = 93
 	AkExtKeyUsageMissing        ErrorCode = 94
+	MultipleImageDescriptions   ErrorCode = 95
+	MultipleCompanyDescriptions ErrorCode = 96
+	MultipleOmspResponses       ErrorCode = 97
 )
 
 func (e ErrorCode) String() string {
@@ -847,6 +850,12 @@ func (e ErrorCode) String() string {
 		return fmt.Sprintf("%v (Measured PCRs do not match quoted PCR selection)", int(e))
 	case AkExtKeyUsageMissing:
 		return fmt.Sprintf("%v (AK certificate lacks extended key usage tcg-kp-AIKCertificate)", int(e))
+	case MultipleImageDescriptions:
+		return fmt.Sprintf("%v (Multiple image descriptions)", int(e))
+	case MultipleCompanyDescriptions:
+		return fmt.Sprintf("%v (Multiple company descriptions)", int(e))
+	case MultipleOmspResponses:
+		return fmt.Sprintf("%v (Multiple OMSP responses for the same server)", int(e))
 	default:
 		return fmt.Sprintf("Unknown error code: %v", int(e))
 	}
