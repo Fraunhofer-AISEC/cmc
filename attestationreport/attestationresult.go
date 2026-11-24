@@ -41,14 +41,14 @@ type AttestationResult struct {
 	Type         string              `json:"type" cbor:"1,keyasint"`
 	Summary      Result              `json:"summary" cbor:"2,keyasint"`
 	Prover       Endpoint            `json:"prover" cbor:"3,keyasint"`
-	Verifier     Endpoint            `json:"verifier,omitempty" cbor:"4,keyasint,omitempty"`
+	Verifier     Endpoint            `json:"verifier,omitzero" cbor:"4,keyasint,omitzero"`
 	Name         string              `json:"name,omitempty" cbor:"10,keyasint,omitempty"`
 	Created      string              `json:"created,omitempty" cbor:"5,keyasint,omitempty"`
 	Freshness    Result              `json:"freshness" cbor:"6,keyasint"`
 	AttestLevel  AttestLevel         `json:"attestLevel" cbor:"7,keyasint"`
 	Measurements []MeasurementResult `json:"measurements" cbor:"8,keyasint"`
 	Metadata     MetadataSummary     `json:"metadata" cbor:"9,keyasint"`
-	PeerAuth     Result              `json:"peerAuth,omitempty" cbor:"11,keyasint,omitempty"`
+	PeerAuth     Result              `json:"peerAuth,omitzero" cbor:"11,keyasint,omitzero"`
 	Claims       map[string][]byte   `json:"claims,omitempty" cbor:"12,keyasint,omitempty"`
 }
 
@@ -130,7 +130,7 @@ type MetadataSummary struct {
 type MetadataResult struct {
 	Metadata
 	Summary          Result            `json:"summary" cbor:"40,keyasint"`
-	ValidityCheck    Result            `json:"validityCheck,omitempty" cbor:"41,keyasint,omitempty"`
+	ValidityCheck    Result            `json:"validityCheck,omitzero" cbor:"41,keyasint,omitzero"`
 	SignatureCheck   []SignatureResult `json:"signatureValidation,omitempty" cbor:"42,keyasint,omitempty"`
 	ManifestHash     string            `json:"manifestHash,omitempty" cbor:"50,keyasint,omitempty"`
 	OmspValidity     *Result           `json:"omspValidity,omitempty" cbor:"51,keyasint,omitempty"`
