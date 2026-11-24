@@ -7,6 +7,8 @@ dir="$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)"
 
 go build -C "${dir}/tools/schema-generator"
 
+rm -rf "${dir}/doc/api/json"
+
 "${dir}/tools/schema-generator/schema-generator" -package api -out "${dir}/doc/api/json"
 "${dir}/tools/schema-generator/schema-generator" -package attestationreport -out "${dir}/doc/api/json"
 "${dir}/tools/schema-generator/schema-generator" -package attestedtls -out "${dir}/doc/api/json"
