@@ -90,7 +90,7 @@ func SignOutput(cmd *cli.Command, data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("--x5cs is required when using --sign")
 	}
 
-	keysPem, err := sign.LoadKeys(cmd.String(KeysFlag))
+	keysPem, err := sign.LoadFiles(cmd.String(KeysFlag))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load keys: %w", err)
 	}
