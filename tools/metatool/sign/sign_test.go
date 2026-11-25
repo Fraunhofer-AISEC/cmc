@@ -28,6 +28,9 @@ import (
 	"encoding/pem"
 	"io"
 	"math/big"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -297,5 +300,231 @@ func TestSignVerifiesOutput(t *testing.T) {
 				t.Fatal("expected error for invalid signature")
 			}
 		})
+	}
+}
+
+// externalSign signs like a KMS or HSM: ECDSA and RSA-PSS over the digest with ASN.1 DER ECDSA
+// signatures, Ed25519 over the data
+func externalSign(t *testing.T, priv crypto.Signer, tbs Tbs, pssSaltLength int) []byte {
+	t.Helper()
+	hashes := map[int]crypto.Hash{32: crypto.SHA256, 48: crypto.SHA384, 64: crypto.SHA512}
+	var sig []byte
+	var err error
+	switch k := priv.(type) {
+	case *ecdsa.PrivateKey:
+		sig, err = ecdsa.SignASN1(rand.Reader, k, tbs.Digest)
+	case *rsa.PrivateKey:
+		sig, err = rsa.SignPSS(rand.Reader, k, hashes[len(tbs.Digest)], tbs.Digest,
+			&rsa.PSSOptions{SaltLength: pssSaltLength})
+	case ed25519.PrivateKey:
+		if tbs.Digest != nil {
+			t.Fatal("unexpected digest for Ed25519")
+		}
+		sig = ed25519.Sign(k, tbs.Data)
+	default:
+		t.Fatalf("unsupported key type %T", priv)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sig
+}
+
+func TestDetached(t *testing.T) {
+	pki := newTestPki(t)
+	keys := generateKeys(t)
+	inputs := testInputs(t)
+
+	for _, format := range []string{"JSON", "CBOR"} {
+		for _, names := range [][]string{
+			{"P-256"}, {"P-384"}, {"P-521"}, {"RSA-2048"}, {"RSA-3072"}, {"RSA-4096"}, {"Ed25519"},
+			{"P-256", "RSA-2048", "Ed25519"},
+		} {
+			name := format
+			for _, k := range names {
+				name += "/" + k
+			}
+			t.Run(name, func(t *testing.T) {
+				data := inputs[format]
+				chainsPem := make([][][]byte, 0)
+				for _, k := range names {
+					chainsPem = append(chainsPem, pki.issue(t, keys[k].priv.Public()))
+				}
+				tbs, err := Prepare(data, chainsPem)
+				if err != nil {
+					t.Fatalf("Prepare() error = %v", err)
+				}
+				if len(tbs) != len(names) {
+					t.Fatalf("got %v to-be-signed items, want %v", len(tbs), len(names))
+				}
+				sigs := make([][]byte, 0)
+				for i, k := range names {
+					sigs = append(sigs, externalSign(t, keys[k].priv, tbs[i], rsa.PSSSaltLengthEqualsHash))
+				}
+				signed, err := Attach(data, sigs, chainsPem)
+				if err != nil {
+					t.Fatalf("Attach() error = %v", err)
+				}
+				verify(t, signed, data, pki.caCert, len(names))
+			})
+		}
+	}
+}
+
+func TestDetachedErrors(t *testing.T) {
+	pki := newTestPki(t)
+	keys := generateKeys(t)
+	inputs := testInputs(t)
+
+	for format, data := range inputs {
+		t.Run(format, func(t *testing.T) {
+			k := keys["P-256"]
+			chainsPem := [][][]byte{pki.issue(t, k.priv.Public())}
+			tbs, err := Prepare(data, chainsPem)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sig := externalSign(t, k.priv, tbs[0], 0)
+			if _, err := Attach(data, [][]byte{sig}, chainsPem); err != nil {
+				t.Fatalf("Attach() error = %v", err)
+			}
+
+			// Signature from a key that does not match the leaf certificate
+			otherKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Attach(data, [][]byte{externalSign(t, otherKey, tbs[0], 0)}, chainsPem); err == nil {
+				t.Error("expected error for signature from wrong key")
+			}
+
+			// Certificate does not match the key that created the signature
+			wrongChain := [][][]byte{pki.issue(t, keys["P-384"].priv.Public())}
+			if _, err := Attach(data, [][]byte{sig}, wrongChain); err == nil {
+				t.Error("expected error for wrong certificate")
+			}
+
+			// Signature over different input
+			changed := []byte(`{"type":"Test Manifest","name":"changed"}`)
+			if format == "CBOR" {
+				changed, err = cbor.Marshal(map[string]string{"type": "Test Manifest", "name": "changed"})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := Attach(changed, [][]byte{sig}, chainsPem); err == nil {
+				t.Error("expected error for changed input")
+			}
+
+			// Truncated signature
+			if _, err := Attach(data, [][]byte{sig[:len(sig)-1]}, chainsPem); err == nil {
+				t.Error("expected error for truncated signature")
+			}
+
+			// Number of signatures and chains differ
+			if _, err := Attach(data, [][]byte{sig, sig}, chainsPem); err == nil {
+				t.Error("expected error for differing number of signatures and chains")
+			}
+
+			// Unsupported key
+			if _, err := Prepare(data, [][][]byte{pki.issue(t, keys["P-224"].priv.Public())}); err == nil {
+				t.Error("expected error for unsupported key")
+			}
+		})
+	}
+}
+
+// TestDetachedPssSaltLength checks that a PSS signature with a salt length other than the hash
+// length is rejected for COSE. The JWS verifier accepts any salt length.
+func TestDetachedPssSaltLength(t *testing.T) {
+	pki := newTestPki(t)
+	k := generateKeys(t)["RSA-2048"]
+	data := testInputs(t)["CBOR"]
+	chainsPem := [][][]byte{pki.issue(t, k.priv.Public())}
+	tbs, err := Prepare(data, chainsPem)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := externalSign(t, k.priv, tbs[0], rsa.PSSSaltLengthAuto)
+	if _, err := Attach(data, [][]byte{sig}, chainsPem); err == nil {
+		t.Fatal("expected error for wrong PSS salt length")
+	}
+}
+
+// TestDetachedOpenssl signs with the openssl commands documented in metatool sign --help, over the
+// digest with pkeyutl and over the data with dgst, which hashes itself
+func TestDetachedOpenssl(t *testing.T) {
+	if _, err := exec.LookPath("openssl"); err != nil {
+		t.Skip("openssl not found")
+	}
+	pki := newTestPki(t)
+	keys := generateKeys(t)
+	inputs := testInputs(t)
+
+	tests := []struct {
+		key    string
+		digest bool
+		args   []string
+	}{
+		{"P-256", true, []string{"pkeyutl", "-sign"}},
+		{"P-384", true, []string{"pkeyutl", "-sign"}},
+		{"RSA-2048", true, []string{"pkeyutl", "-sign", "-pkeyopt", "rsa_padding_mode:pss",
+			"-pkeyopt", "rsa_pss_saltlen:digest", "-pkeyopt", "digest:sha256"}},
+		{"RSA-3072", true, []string{"pkeyutl", "-sign", "-pkeyopt", "rsa_padding_mode:pss",
+			"-pkeyopt", "rsa_pss_saltlen:digest", "-pkeyopt", "digest:sha384"}},
+		{"Ed25519", false, []string{"pkeyutl", "-sign", "-rawin"}},
+		{"P-256", false, []string{"dgst", "-sha256", "-sign"}},
+		{"P-384", false, []string{"dgst", "-sha384", "-sign"}},
+		{"RSA-2048", false, []string{"dgst", "-sha256", "-sigopt", "rsa_padding_mode:pss",
+			"-sigopt", "rsa_pss_saltlen:digest", "-sign"}},
+	}
+
+	for _, format := range []string{"JSON", "CBOR"} {
+		for _, tt := range tests {
+			t.Run(format+"/"+tt.key+"/"+tt.args[0], func(t *testing.T) {
+				dir := t.TempDir()
+				keyFile := filepath.Join(dir, "key.pem")
+				inFile := filepath.Join(dir, "in")
+				sigFile := filepath.Join(dir, "sig")
+				if err := os.WriteFile(keyFile, keys[tt.key].pem, 0600); err != nil {
+					t.Fatal(err)
+				}
+
+				data := inputs[format]
+				chainsPem := [][][]byte{pki.issue(t, keys[tt.key].priv.Public())}
+				tbs, err := Prepare(data, chainsPem)
+				if err != nil {
+					t.Fatal(err)
+				}
+				in := tbs[0].Data
+				if tt.digest {
+					in = tbs[0].Digest
+				}
+				if err := os.WriteFile(inFile, in, 0600); err != nil {
+					t.Fatal(err)
+				}
+
+				var args []string
+				if tt.args[0] == "dgst" {
+					// dgst expects the key as argument of -sign and the input last
+					args = append(tt.args, keyFile, "-out", sigFile, inFile)
+				} else {
+					args = append(tt.args, "-inkey", keyFile, "-in", inFile, "-out", sigFile)
+				}
+				if out, err := exec.Command("openssl", args...).CombinedOutput(); err != nil {
+					t.Fatalf("openssl %v failed: %v: %s", args, err, out)
+				}
+				sig, err := os.ReadFile(sigFile)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				signed, err := Attach(data, [][]byte{sig}, chainsPem)
+				if err != nil {
+					t.Fatalf("Attach() error = %v", err)
+				}
+				verify(t, signed, data, pki.caCert, 1)
+			})
+		}
 	}
 }

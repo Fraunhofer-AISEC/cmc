@@ -21,11 +21,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/fxamacker/cbor/v2"
+	"github.com/veraison/go-cose"
 )
 
 type serializer interface {
@@ -50,6 +52,125 @@ func Sign(data []byte, keysPem [][]byte, chainsPem [][][]byte) ([]byte, error) {
 	}
 	log.Tracef("Read %v private keys", len(signers))
 
+	certChains, err := parseCertChains(chainsPem)
+	if err != nil {
+		return nil, err
+	}
+
+	return signWith(data, signers, certChains)
+}
+
+// Tbs holds what an external signer has to sign for one signature
+type Tbs struct {
+	// Data is the exact byte string to be signed (JWS signing input or COSE Sig_structure)
+	Data []byte
+	// Digest is the hash of Data under the signature algorithm, nil for Ed25519
+	Digest []byte
+}
+
+// Prepare returns the to-be-signed data for each certificate chain, so that the signatures can be
+// created outside of metatool and added with Attach. The signature algorithm is derived from the
+// public key of the leaf certificate.
+func Prepare(data []byte, chainsPem [][][]byte) ([]Tbs, error) {
+
+	certChains, err := parseCertChains(chainsPem)
+	if err != nil {
+		return nil, err
+	}
+
+	recorders := make([]*internal.TbsRecorder, 0, len(certChains))
+	signers := make([]crypto.Signer, 0, len(certChains))
+	for _, chain := range certChains {
+		r := &internal.TbsRecorder{Key: chain[0].PublicKey}
+		recorders = append(recorders, r)
+		signers = append(signers, r)
+	}
+
+	s, err := detectSerializer(data)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.sign(data, signers, certChains); err != nil {
+		return nil, fmt.Errorf("failed to prepare data: %w", err)
+	}
+
+	tbs := make([]Tbs, 0, len(recorders))
+	for i, r := range recorders {
+		h, err := hashFromPublicKey(r.Key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get hash algorithm for signer %v: %w", i, err)
+		}
+		t := Tbs{Data: r.Tbs}
+		if h != 0 {
+			hasher := h.New()
+			hasher.Write(r.Tbs)
+			t.Digest = hasher.Sum(nil)
+		}
+		tbs = append(tbs, t)
+	}
+
+	return tbs, nil
+}
+
+// Attach creates the signed output from data, the certificate chains and the signatures created
+// over the output of Prepare. ECDSA signatures must be ASN.1 DER encoded. The inputs must be
+// identical to the ones passed to Prepare.
+func Attach(data []byte, signatures [][]byte, chainsPem [][][]byte) ([]byte, error) {
+
+	certChains, err := parseCertChains(chainsPem)
+	if err != nil {
+		return nil, err
+	}
+	if len(signatures) != len(certChains) {
+		return nil, fmt.Errorf("number of signatures (%v) does not match number of certificate chains (%v)",
+			len(signatures), len(certChains))
+	}
+
+	signers := make([]crypto.Signer, 0, len(signatures))
+	for i, sig := range signatures {
+		signers = append(signers, detachedSigner{pub: certChains[i][0].PublicKey, sig: sig})
+	}
+
+	return signWith(data, signers, certChains)
+}
+
+// detachedSigner returns a signature that was created outside of metatool. As crypto.Signer
+// returns ASN.1 DER for ECDSA, the JWS and COSE libraries convert it to the raw format.
+type detachedSigner struct {
+	pub crypto.PublicKey
+	sig []byte
+}
+
+func (s detachedSigner) Public() crypto.PublicKey {
+	return s.pub
+}
+
+func (s detachedSigner) Sign(io.Reader, []byte, crypto.SignerOpts) ([]byte, error) {
+	return s.sig, nil
+}
+
+// hashFromPublicKey returns the hash of the signature algorithm for the key, which is the same for
+// JWS and COSE, or 0 for Ed25519
+func hashFromPublicKey(pub crypto.PublicKey) (crypto.Hash, error) {
+	alg, err := internal.CoseAlgFromPublicKey(pub)
+	if err != nil {
+		return 0, err
+	}
+	switch alg {
+	case cose.AlgorithmES256, cose.AlgorithmPS256:
+		return crypto.SHA256, nil
+	case cose.AlgorithmES384, cose.AlgorithmPS384:
+		return crypto.SHA384, nil
+	case cose.AlgorithmES512, cose.AlgorithmPS512:
+		return crypto.SHA512, nil
+	case cose.AlgorithmEdDSA:
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("unsupported algorithm %v", alg)
+	}
+}
+
+func parseCertChains(chainsPem [][][]byte) ([][]*x509.Certificate, error) {
 	certChains := make([][]*x509.Certificate, 0, len(chainsPem))
 	for i, chainPem := range chainsPem {
 		certChain := make([]*x509.Certificate, 0, len(chainPem))
@@ -66,8 +187,20 @@ func Sign(data []byte, keysPem [][]byte, chainsPem [][][]byte) ([]byte, error) {
 		certChains = append(certChains, certChain)
 	}
 	log.Tracef("Read %v certificate chains", len(certChains))
+	return certChains, nil
+}
 
-	return signWith(data, signers, certChains)
+// detectSerializer detects the serialization format. Currently, JSON and CBOR are supported
+func detectSerializer(data []byte) (serializer, error) {
+	if json.Valid(data) {
+		log.Trace("Detected JSON serialization")
+		return jsonSerializer{}, nil
+	}
+	if err := cbor.Wellformed(data); err == nil {
+		log.Trace("Detected CBOR serialization")
+		return cborSerializer{}, nil
+	}
+	return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
 }
 
 // signWith signs data with arbitrary signers, e.g. keys held in a KMS or HSM. Each signer must
@@ -96,16 +229,9 @@ func signWith(data []byte, signers []crypto.Signer, certChains [][]*x509.Certifi
 		leafKeys = append(leafKeys, leaf.PublicKey)
 	}
 
-	// Detect serialization format. Currently, JSON and CBOR are supported
-	var s serializer
-	if json.Valid(data) {
-		log.Trace("Detected JSON serialization")
-		s = jsonSerializer{}
-	} else if err := cbor.Wellformed(data); err == nil {
-		log.Trace("Detected CBOR serialization")
-		s = cborSerializer{}
-	} else {
-		return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
+	s, err := detectSerializer(data)
+	if err != nil {
+		return nil, err
 	}
 
 	signedData, err := s.sign(data, signers, certChains)
@@ -122,16 +248,17 @@ func signWith(data []byte, signers []crypto.Signer, certChains [][]*x509.Certifi
 	return signedData, nil
 }
 
-func LoadKeys(keyFiles string) ([][]byte, error) {
-	keysPem := make([][]byte, 0)
-	for keyFile := range strings.SplitSeq(keyFiles, ",") {
-		k, err := os.ReadFile(keyFile)
+// LoadFiles reads the comma-separated list of files
+func LoadFiles(files string) ([][]byte, error) {
+	contents := make([][]byte, 0)
+	for file := range strings.SplitSeq(files, ",") {
+		c, err := os.ReadFile(file)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read key file %v: %w", keyFile, err)
+			return nil, fmt.Errorf("failed to read file %v: %w", file, err)
 		}
-		keysPem = append(keysPem, k)
+		contents = append(contents, c)
 	}
-	return keysPem, nil
+	return contents, nil
 }
 
 func LoadCertChains(x5cFiles string) ([][][]byte, error) {

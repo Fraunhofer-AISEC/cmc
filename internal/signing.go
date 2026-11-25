@@ -16,6 +16,7 @@
 package internal
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/ed25519"
@@ -26,6 +27,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/cryptosigner"
@@ -51,9 +53,62 @@ func Sign(data []byte, priv crypto.PrivateKey, serializer string,
 	}
 }
 
+// TbsRecorder can be passed to SignJws and SignCose in place of a signer to obtain the bytes to be
+// signed instead of a signature, e.g. to sign them with an external tool. It records the JWS
+// signing input or the COSE Sig_structure in Tbs. The resulting signature is a placeholder, so the
+// output of SignJws and SignCose is not valid.
+type TbsRecorder struct {
+	Key crypto.PublicKey
+	Tbs []byte
+}
+
+func (r *TbsRecorder) Public() crypto.PublicKey {
+	return r.Key
+}
+
+func (r *TbsRecorder) Sign(io.Reader, []byte, crypto.SignerOpts) ([]byte, error) {
+	return nil, errors.New("TbsRecorder can only be used with SignJws and SignCose")
+}
+
+var placeholderSignature = []byte{0}
+
+// jwsRecorder implements jose.OpaqueSigner, which receives the JWS signing input
+type jwsRecorder struct {
+	r   *TbsRecorder
+	alg jose.SignatureAlgorithm
+}
+
+func (j jwsRecorder) Public() *jose.JSONWebKey {
+	return &jose.JSONWebKey{Key: j.r.Key}
+}
+
+func (j jwsRecorder) Algs() []jose.SignatureAlgorithm {
+	return []jose.SignatureAlgorithm{j.alg}
+}
+
+func (j jwsRecorder) SignPayload(payload []byte, _ jose.SignatureAlgorithm) ([]byte, error) {
+	j.r.Tbs = bytes.Clone(payload)
+	return placeholderSignature, nil
+}
+
+// coseRecorder implements cose.Signer, which receives the Sig_structure
+type coseRecorder struct {
+	r   *TbsRecorder
+	alg cose.Algorithm
+}
+
+func (c coseRecorder) Algorithm() cose.Algorithm {
+	return c.alg
+}
+
+func (c coseRecorder) Sign(_ io.Reader, content []byte) ([]byte, error) {
+	c.r.Tbs = bytes.Clone(content)
+	return placeholderSignature, nil
+}
+
 // SignJws creates a JSON Web Signature with one signature per signer. Each signature carries the
 // corresponding certificate chain in its x5c header if the chain is not empty. The signature
-// algorithm is derived from the public key of each signer.
+// algorithm is derived from the public key of each signer. Signers may be TbsRecorders.
 func SignJws(data []byte, signers []crypto.Signer, certChains [][]*x509.Certificate,
 ) ([]byte, error) {
 	if len(signers) == 0 {
@@ -83,10 +138,11 @@ func SignJws(data []byte, signers []crypto.Signer, certChains [][]*x509.Certific
 			opts.WithHeader("x5c", certsb64)
 		}
 
-		joseSigner, err := jose.NewSigner(
-			jose.SigningKey{Algorithm: alg, Key: cryptosigner.Opaque(signer)},
-			opts,
-		)
+		var key jose.OpaqueSigner = cryptosigner.Opaque(signer)
+		if r, ok := signer.(*TbsRecorder); ok {
+			key = jwsRecorder{r: r, alg: alg}
+		}
+		joseSigner, err := jose.NewSigner(jose.SigningKey{Algorithm: alg, Key: key}, opts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create signer %v: %w", i, err)
 		}
@@ -108,7 +164,7 @@ func SignJws(data []byte, signers []crypto.Signer, certChains [][]*x509.Certific
 
 // SignCose creates a COSE_Sign message with one signature per signer. Each signature carries the
 // corresponding certificate chain in its x5chain header if the chain is not empty. The signature
-// algorithm is derived from the public key of each signer.
+// algorithm is derived from the public key of each signer. Signers may be TbsRecorders.
 func SignCose(data []byte, signers []crypto.Signer, certChains [][]*x509.Certificate,
 ) ([]byte, error) {
 	if len(signers) == 0 {
@@ -132,9 +188,14 @@ func SignCose(data []byte, signers []crypto.Signer, certChains [][]*x509.Certifi
 		}
 		log.Tracef("Chosen COSE signature algorithm for signer %v: %v", i, alg)
 
-		coseSigner, err := cose.NewSigner(alg, signer)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create signer %v: %w", i, err)
+		var coseSigner cose.Signer
+		if r, ok := signer.(*TbsRecorder); ok {
+			coseSigner = coseRecorder{r: r, alg: alg}
+		} else {
+			coseSigner, err = cose.NewSigner(alg, signer)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create signer %v: %w", i, err)
+			}
 		}
 		coseSigners = append(coseSigners, coseSigner)
 
