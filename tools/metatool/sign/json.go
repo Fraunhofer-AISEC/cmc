@@ -16,64 +16,43 @@
 package sign
 
 import (
+	"bytes"
 	"crypto"
-	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/x509"
-	"encoding/base64"
 	"fmt"
 
+	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 	"github.com/go-jose/go-jose/v4"
 )
 
-type JsonSerializer struct{}
+type jsonSerializer struct{}
 
-func (s JsonSerializer) Sign(data []byte, keys []crypto.PrivateKey, x5cs [][]*x509.Certificate) ([]byte, error) {
+func (s jsonSerializer) sign(data []byte, signers []crypto.Signer, x5cs [][]*x509.Certificate) ([]byte, error) {
+	return internal.SignJws(data, signers, x5cs)
+}
 
-	if len(keys) != len(x5cs) {
-		return nil, fmt.Errorf("length of keys (%v) not equal to length of certificate chains (%v)", keys, x5cs)
+// verify checks that signature i of the JWS verifies with key i over data, using the
+// algorithms accepted by the attestation report verifier
+func (s jsonSerializer) verify(signed, data []byte, keys []crypto.PublicKey) error {
+	jws, err := jose.ParseSigned(string(signed), ar.JwsAlgorithms)
+	if err != nil {
+		return fmt.Errorf("failed to parse JWS: %w", err)
 	}
-
-	var sig *jose.JSONWebSignature
-	for i := range keys {
-
-		var alg jose.SignatureAlgorithm
-		switch keys[i].(type) {
-		case *ecdsa.PrivateKey:
-			log.Trace("Key type ECDSA")
-			alg = jose.SignatureAlgorithm("ES256")
-		case ed25519.PrivateKey:
-			log.Trace("Key type EdDSA")
-			alg = jose.SignatureAlgorithm("EdDSA")
-		default:
-			return nil, fmt.Errorf("key type %v not supported", keys[i])
-		}
-		log.Tracef("Using signature algorithm: %v", alg)
-
-		var opts jose.SignerOptions
-		key := jose.SigningKey{Algorithm: alg, Key: keys[i]}
-		certchain := make([]string, 0)
-		for _, cert := range x5cs[i] {
-			certchain = append(certchain, base64.StdEncoding.EncodeToString(cert.Raw))
-		}
-		signer, err := jose.NewSigner(key, opts.WithHeader("x5c", certchain))
+	if len(jws.Signatures) != len(keys) {
+		return fmt.Errorf("number of signatures (%v) does not match number of keys (%v)",
+			len(jws.Signatures), len(keys))
+	}
+	for i, sig := range jws.Signatures {
+		single := *jws
+		single.Signatures = []jose.Signature{sig}
+		payload, err := single.Verify(keys[i])
 		if err != nil {
-			return nil, fmt.Errorf("failed to create signer: %v", err)
+			return fmt.Errorf("failed to verify signature %v: %w", i, err)
 		}
-		if i == 0 {
-			sig, err = signer.Sign(data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create signature: %v", err)
-			}
-		} else {
-			s, err := signer.Sign(data)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create signature: %v", err)
-			}
-			sig.Signatures = append(sig.Signatures, s.Signatures[0])
+		if !bytes.Equal(payload, data) {
+			return fmt.Errorf("payload of signature %v does not match input", i)
 		}
 	}
-
-	output := sig.FullSerialize()
-	return []byte(output), nil
+	return nil
 }

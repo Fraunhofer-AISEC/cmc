@@ -18,6 +18,7 @@ package internal
 import (
 	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
@@ -27,112 +28,137 @@ import (
 	"fmt"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/cryptosigner"
 	"github.com/veraison/go-cose"
 )
 
+// Sign signs data with a single key and an optional certificate chain
 func Sign(data []byte, priv crypto.PrivateKey, serializer string,
 	certChain []*x509.Certificate,
 ) ([]byte, error) {
+	signer, ok := priv.(crypto.Signer)
+	if !ok {
+		return nil, fmt.Errorf("signing key of type %T is not a crypto.Signer", priv)
+	}
+	chains := [][]*x509.Certificate{certChain}
 	switch serializer {
 	case "JSON":
-		return signJson(data, priv, certChain)
+		return SignJws(data, []crypto.Signer{signer}, chains)
 	case "CBOR":
-		return signCbor(data, priv, certChain)
+		return SignCose(data, []crypto.Signer{signer}, chains)
 	default:
 		return nil, fmt.Errorf("unknown serializer %v", serializer)
 	}
 }
 
-func signJson(data []byte, priv crypto.PrivateKey, certChain []*x509.Certificate,
+// SignJws creates a JSON Web Signature with one signature per signer. Each signature carries the
+// corresponding certificate chain in its x5c header if the chain is not empty. The signature
+// algorithm is derived from the public key of each signer.
+func SignJws(data []byte, signers []crypto.Signer, certChains [][]*x509.Certificate,
 ) ([]byte, error) {
-	log.Tracef("Signing JSON data length %v...", len(data))
-
-	// Certificate chain in base64 encoding if present
-	certsb64 := make([]string, 0)
-	for _, cert := range certChain {
-		certsb64 = append(certsb64, base64.StdEncoding.EncodeToString(cert.Raw))
+	if len(signers) == 0 {
+		return nil, errors.New("no signers specified")
+	}
+	if len(signers) != len(certChains) {
+		return nil, fmt.Errorf("number of signers (%v) does not match number of certificate chains (%v)",
+			len(signers), len(certChains))
 	}
 
-	// Get signature algorithm
-	alg, err := algFromKeyType(priv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get alg from key type: %w", err)
-	}
-	log.Trace("Chosen signature algorithm: ", alg)
+	log.Tracef("Signing JSON data length %v with %v signers...", len(data), len(signers))
 
-	// Create signer with certificate chain header if present
-	opts := &jose.SignerOptions{}
-	if len(certsb64) > 0 {
-		opts.WithHeader("x5c", certsb64)
-	}
-	var joseSigner jose.Signer
-	joseSigner, err = jose.NewSigner(
-		jose.SigningKey{Algorithm: alg, Key: priv},
-		opts,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup signer : %w", err)
-	}
+	var jws *jose.JSONWebSignature
+	for i, signer := range signers {
+		alg, err := JwsAlgFromPublicKey(signer.Public())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get JWS algorithm for signer %v: %w", i, err)
+		}
+		log.Tracef("Chosen JWS signature algorithm for signer %v: %v", i, alg)
 
-	// sign
-	log.Tracef("Signing data length %v", len(data))
-	obj, err := joseSigner.Sign(data)
-	if err != nil {
-		return nil, err
+		certsb64 := make([]string, 0, len(certChains[i]))
+		for _, cert := range certChains[i] {
+			certsb64 = append(certsb64, base64.StdEncoding.EncodeToString(cert.Raw))
+		}
+		opts := &jose.SignerOptions{}
+		if len(certsb64) > 0 {
+			opts.WithHeader("x5c", certsb64)
+		}
+
+		joseSigner, err := jose.NewSigner(
+			jose.SigningKey{Algorithm: alg, Key: cryptosigner.Opaque(signer)},
+			opts,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create signer %v: %w", i, err)
+		}
+
+		obj, err := joseSigner.Sign(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign with signer %v: %w", i, err)
+		}
+		if jws == nil {
+			jws = obj
+		} else {
+			jws.Signatures = append(jws.Signatures, obj.Signatures...)
+		}
 	}
 	log.Trace("Signing finished")
 
-	// return signature in bytes
-	msg := obj.FullSerialize()
-
-	return []byte(msg), nil
+	return []byte(jws.FullSerialize()), nil
 }
 
-func signCbor(data []byte, priv crypto.PrivateKey, certChain []*x509.Certificate) ([]byte, error) {
-
-	log.Tracef("Signing CBOR data length %v...", len(data))
-
-	certChainRaw := make([][]byte, 0)
-	for _, cert := range certChain {
-		certChainRaw = append(certChainRaw, cert.Raw)
+// SignCose creates a COSE_Sign message with one signature per signer. Each signature carries the
+// corresponding certificate chain in its x5chain header if the chain is not empty. The signature
+// algorithm is derived from the public key of each signer.
+func SignCose(data []byte, signers []crypto.Signer, certChains [][]*x509.Certificate,
+) ([]byte, error) {
+	if len(signers) == 0 {
+		return nil, errors.New("no signers specified")
+	}
+	if len(signers) != len(certChains) {
+		return nil, fmt.Errorf("number of signers (%v) does not match number of certificate chains (%v)",
+			len(signers), len(certChains))
 	}
 
-	stmp, ok := priv.(crypto.Signer)
-	if !ok {
-		return nil, fmt.Errorf("failed to convert signing key of type %T", priv)
+	log.Tracef("Signing CBOR data length %v with %v signers...", len(data), len(signers))
+
+	msg := cose.NewSignMessage()
+	msg.Payload = data
+
+	coseSigners := make([]cose.Signer, 0, len(signers))
+	for i, signer := range signers {
+		alg, err := CoseAlgFromPublicKey(signer.Public())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get COSE algorithm for signer %v: %w", i, err)
+		}
+		log.Tracef("Chosen COSE signature algorithm for signer %v: %v", i, alg)
+
+		coseSigner, err := cose.NewSigner(alg, signer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create signer %v: %w", i, err)
+		}
+		coseSigners = append(coseSigners, coseSigner)
+
+		sigHolder := cose.NewSignature()
+		sigHolder.Headers.Protected.SetAlgorithm(alg)
+		if len(certChains[i]) > 0 {
+			// https://datatracker.ietf.org/doc/draft-ietf-cose-x509/08/ section 2
+			// If multiple certificates are conveyed, a CBOR array of byte strings is used,
+			// with each certificate being in its own byte string (DER Encoded)
+			certChainRaw := make([][]byte, 0, len(certChains[i]))
+			for _, cert := range certChains[i] {
+				certChainRaw = append(certChainRaw, cert.Raw)
+			}
+			sigHolder.Headers.Unprotected[cose.HeaderLabelX5Chain] = certChainRaw
+		}
+		msg.Signatures = append(msg.Signatures, sigHolder)
 	}
 
-	alg, err := coseAlgFromKeyType(priv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get COSE algorithm from key type: %w", err)
-	}
-	log.Trace("Chosen COSE signature algorithm: ", alg)
-
-	coseSigner, err := cose.NewSigner(alg, stmp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create signer: %w", err)
-	}
-
-	// create a signature holder
-	sigHolder := cose.NewSignature()
-	sigHolder.Headers.Protected.SetAlgorithm(alg)
-
-	// https://datatracker.ietf.org/doc/draft-ietf-cose-x509/08/ section 2
-	// If multiple certificates are conveyed, a CBOR array of byte strings is used,
-	// with each certificate being in its own byte string (DER Encoded)
-	sigHolder.Headers.Unprotected[cose.HeaderLabelX5Chain] = certChainRaw
-
-	msgToSign := cose.NewSignMessage()
-	msgToSign.Payload = data
-	msgToSign.Signatures = append(msgToSign.Signatures, sigHolder)
-
-	err = msgToSign.Sign(rand.Reader, nil, coseSigner)
+	err := msg.Sign(rand.Reader, nil, coseSigners...)
 	if err != nil {
 		return nil, fmt.Errorf("signing failed: %w. len(data): %v", err, len(data))
 	}
 
-	// sign and marshal message
-	coseRaw, err := msgToSign.MarshalCBOR()
+	coseRaw, err := msg.MarshalCBOR()
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal cbor object: %w", err)
 	}
@@ -142,102 +168,68 @@ func signCbor(data []byte, priv crypto.PrivateKey, certChain []*x509.Certificate
 	return coseRaw, nil
 }
 
-// Deduces jose signature algorithm from provided key type
-func algFromKeyType(priv crypto.PrivateKey) (jose.SignatureAlgorithm, error) {
-	switch key := priv.(type) {
-	case rsa.PrivateKey:
+// JwsAlgFromPublicKey deduces the JWS signature algorithm from the public key of the signer.
+// RSA uses RSASSA-PSS with a hash matching the security level of the key size.
+func JwsAlgFromPublicKey(pub crypto.PublicKey) (jose.SignatureAlgorithm, error) {
+	switch key := pub.(type) {
+	case *rsa.PublicKey:
 		switch key.Size() {
 		case 256:
-			// FUTURE: use RSA PSS: PS256
-			return jose.RS256, nil
+			return jose.PS256, nil
+		case 384:
+			return jose.PS384, nil
 		case 512:
-			// FUTURE: use RSA PSS: PS512
-			return jose.RS512, nil
+			return jose.PS512, nil
 		default:
-			return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
+			return "", fmt.Errorf("unsupported RSA key size: %v bits", key.Size()*8)
 		}
-	case *rsa.PrivateKey:
-		switch key.Size() {
-		case 256:
-			// FUTURE: use RSA PSS: PS256
-			return jose.RS256, nil
-		case 512:
-			// FUTURE: use RSA PSS: PS512
-			return jose.RS512, nil
-		default:
-			return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown RSA key size: %v", key.Size())
-		}
-	case ecdsa.PrivateKey:
+	case *ecdsa.PublicKey:
 		switch key.Curve {
-		case elliptic.P224(), elliptic.P256():
+		case elliptic.P256():
 			return jose.ES256, nil
 		case elliptic.P384():
 			return jose.ES384, nil
 		case elliptic.P521():
 			return jose.ES512, nil
 		default:
-			return jose.RS256, errors.New("failed to determine algorithm from key type: unknown elliptic curve")
+			return "", fmt.Errorf("unsupported elliptic curve: %v", key.Curve.Params().Name)
 		}
-	case *ecdsa.PrivateKey:
-		switch key.Curve {
-		case elliptic.P224(), elliptic.P256():
-			return jose.ES256, nil
-		case elliptic.P384():
-			return jose.ES384, nil
-		case elliptic.P521():
-			return jose.ES512, nil
-		default:
-			return jose.RS256, errors.New("failed to determine algorithm from key type: unknown elliptic curve")
-		}
+	case ed25519.PublicKey:
+		return jose.EdDSA, nil
 	default:
-		return jose.RS256, fmt.Errorf("failed to determine algorithm from key type: unknown key type %T", priv)
+		return "", fmt.Errorf("unsupported key type %T", pub)
 	}
 }
 
-// Deduces COSE signature algorithm from provided key type
-func coseAlgFromKeyType(priv crypto.PrivateKey) (cose.Algorithm, error) {
-	switch key := priv.(type) {
-	case rsa.PrivateKey:
+// CoseAlgFromPublicKey deduces the COSE signature algorithm from the public key of the signer.
+// RSA uses RSASSA-PSS with a hash matching the security level of the key size.
+func CoseAlgFromPublicKey(pub crypto.PublicKey) (cose.Algorithm, error) {
+	switch key := pub.(type) {
+	case *rsa.PublicKey:
 		switch key.Size() {
 		case 256:
-			return cose.AlgorithmRS256, nil
+			return cose.AlgorithmPS256, nil
+		case 384:
+			return cose.AlgorithmPS384, nil
 		case 512:
-			return cose.AlgorithmRS512, nil
+			return cose.AlgorithmPS512, nil
 		default:
-			return cose.AlgorithmReserved, fmt.Errorf("unsupported RSA key size: %v", key.Size())
+			return cose.AlgorithmReserved, fmt.Errorf("unsupported RSA key size: %v bits", key.Size()*8)
 		}
-	case *rsa.PrivateKey:
-		switch key.Size() {
-		case 256:
-			return cose.AlgorithmRS256, nil
-		case 512:
-			return cose.AlgorithmRS512, nil
-		default:
-			return cose.AlgorithmReserved, fmt.Errorf("unsupported RSA key size: %v", key.Size())
-		}
-	case ecdsa.PrivateKey:
+	case *ecdsa.PublicKey:
 		switch key.Curve {
-		case elliptic.P224(), elliptic.P256():
+		case elliptic.P256():
 			return cose.AlgorithmES256, nil
 		case elliptic.P384():
 			return cose.AlgorithmES384, nil
 		case elliptic.P521():
 			return cose.AlgorithmES512, nil
 		default:
-			return cose.AlgorithmReserved, errors.New("unsupported elliptic curve for COSE")
+			return cose.AlgorithmReserved, fmt.Errorf("unsupported elliptic curve: %v", key.Curve.Params().Name)
 		}
-	case *ecdsa.PrivateKey:
-		switch key.Curve {
-		case elliptic.P224(), elliptic.P256():
-			return cose.AlgorithmES256, nil
-		case elliptic.P384():
-			return cose.AlgorithmES384, nil
-		case elliptic.P521():
-			return cose.AlgorithmES512, nil
-		default:
-			return cose.AlgorithmReserved, errors.New("unsupported elliptic curve for COSE")
-		}
+	case ed25519.PublicKey:
+		return cose.AlgorithmEdDSA, nil
 	default:
-		return cose.AlgorithmReserved, fmt.Errorf("unsupported key type for COSE: %T", priv)
+		return cose.AlgorithmReserved, fmt.Errorf("unsupported key type %T", pub)
 	}
 }
