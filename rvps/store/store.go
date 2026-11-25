@@ -21,7 +21,6 @@ import "context"
 const ListPageSize = 100
 
 type EntryInfo struct {
-	Sequence    int64
 	Id          string
 	Type        string
 	Name        string
@@ -29,6 +28,7 @@ type EntryInfo struct {
 	VersionTime int64
 	Signer      string
 	Format      string
+	Origin      string
 	Created     string
 }
 

@@ -46,6 +46,9 @@ const (
 	maxQuerySize    = 1_000_000
 	maxQueryEntries = 500
 	serverTimeout   = 60 * time.Second
+
+	// origin of entries, which have been uploaded directly to this instance
+	originLocal = "local"
 )
 
 // Create a new RVPS server operating on the given index and blob store
@@ -150,7 +153,7 @@ func handleBadRequest(resp http.ResponseWriter, format string, args ...any) {
 	resp.WriteHeader(http.StatusBadRequest)
 	resp.Write([]byte(msg))
 }
-func handleSendEntry(resp http.ResponseWriter, what string, entry *MetadataFull) {
+func handleSendEntry(resp http.ResponseWriter, what string, entry *MetadataBundle) {
 	// check if no entry was found
 	if entry == nil {
 		log.Debugf("No metadata with %v found", what)
@@ -247,9 +250,9 @@ func (s *Server) handleEnumerate(resp http.ResponseWriter, req *http.Request) {
 		handleInternalError(resp, fmt.Sprintf("failed to enumerate metadata: %v", err))
 		return
 	}
-	infos := make([]MetadataInfo, 0, len(entries))
+	infos := make([]api.MetadataInfo, 0, len(entries))
 	for _, entry := range entries {
-		infos = append(infos, LoadMetadataInfo(&entry))
+		infos = append(infos, makeApiEntry(entry))
 	}
 
 	// send the enumeration information as json encoded back
@@ -277,20 +280,16 @@ func (s *Server) handleUpload(resp http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// convert the parsed entry to its index representation
+	// setup the load-parameter (will be discarded, if the entry is not actually inserted)
 	entry.Created = time.Now().UTC().Format(time.RFC3339)
-	indexEntry, err := StoreMetadata(entry)
-	if err != nil {
-		handleInternalError(resp, fmt.Sprintf("failed to convert metadata: %v", err))
-		return
-	}
+	entry.Origin = originLocal
 
 	// write the blob first, as blob without index is harmless, but an index must point at a valid blob
 	if err := s.blobs.Put(req.Context(), entry.Id, body); err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to store metadata blob: %v", err))
 		return
 	}
-	inserted, err := s.index.Insert(req.Context(), *indexEntry)
+	inserted, err := s.index.Insert(req.Context(), *entry)
 	if err != nil {
 		handleInternalError(resp, fmt.Sprintf("failed to insert metadata: %v", err))
 		return
@@ -433,6 +432,7 @@ func (s *Server) handleQuery(resp http.ResponseWriter, req *http.Request) {
 			Name:    entry.Info.Name,
 			Type:    entry.Info.Type,
 			Version: entry.Info.Version,
+			Signer:  entry.Info.Signer,
 			Data:    entry.Raw,
 		}
 	}
@@ -499,21 +499,21 @@ func (s *Server) handleFetchName(resp http.ResponseWriter, req *http.Request) {
 	handleSendEntry(resp, fmt.Sprintf("name (%v)", name), entry)
 }
 
-func (s *Server) unpackById(ctx context.Context, id string, parse bool) (*MetadataFull, error) {
+func (s *Server) unpackById(ctx context.Context, id string, parse bool) (*MetadataBundle, error) {
 	info, err := s.index.ByID(ctx, strings.ToLower(id))
 	if err != nil {
 		return nil, err
 	}
 	return s.unpackEntry(ctx, info, parse)
 }
-func (s *Server) unpackByName(ctx context.Context, name, kind string, signer *string, parse bool) (*MetadataFull, error) {
+func (s *Server) unpackByName(ctx context.Context, name, kind string, signer *string, parse bool) (*MetadataBundle, error) {
 	info, err := s.index.Latest(ctx, kind, name, signer)
 	if err != nil {
 		return nil, err
 	}
 	return s.unpackEntry(ctx, info, parse)
 }
-func (s *Server) unpackEntry(ctx context.Context, info *store.EntryInfo, parse bool) (*MetadataFull, error) {
+func (s *Server) unpackEntry(ctx context.Context, info *store.EntryInfo, parse bool) (*MetadataBundle, error) {
 	// check if the index does not know the entry
 	if info == nil {
 		return nil, nil
@@ -528,4 +528,16 @@ func (s *Server) unpackEntry(ctx context.Context, info *store.EntryInfo, parse b
 		return nil, fmt.Errorf("metadata blob (id %v) is referenced by the index but missing in the blob store", info.Id)
 	}
 	return UnpackMetadata(info, raw, parse)
+}
+func makeApiEntry(info store.EntryInfo) api.MetadataInfo {
+	return api.MetadataInfo{
+		Id:      info.Id,
+		Type:    info.Type,
+		Name:    info.Name,
+		Version: info.Version,
+		Signer:  info.Signer,
+		Created: info.Created,
+		Origin:  info.Origin,
+		Format:  info.Format,
+	}
 }

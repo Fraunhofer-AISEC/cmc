@@ -35,6 +35,7 @@ type QueryMetadataEntry struct {
 	Name    string `json:"name"`
 	Type    string `json:"type"`
 	Version string `json:"version"`
+	Signer  string `json:"signer"`
 }
 
 type QueryResponse struct {
@@ -42,4 +43,15 @@ type QueryResponse struct {
 	Metadata     map[string]QueryMetadataEntry `json:"metadata"`
 	UnknownIds   []string                      `json:"unknownIds,omitempty"`
 	UnknownNames []QueryNameEntry              `json:"unknownNames,omitempty"`
+}
+
+type MetadataInfo struct {
+	Id      string `json:"id"`
+	Type    string `json:"type"`
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	Signer  string `json:"signer"`
+	Created string `json:"created"`
+	Origin  string `json:"origin"`
+	Format  string `json:"format"`
 }

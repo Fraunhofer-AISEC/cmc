@@ -31,18 +31,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type MetadataInfo struct {
-	Id      string `json:"id"`
-	Type    string `json:"type"`
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Signer  string `json:"signer"`
-	Created string `json:"created"`
-	Format  string `json:"format"`
-}
-
-type MetadataFull struct {
-	Info   MetadataInfo
+type MetadataBundle struct {
+	Info   store.EntryInfo
 	Raw    []byte
 	parsed *ar.Metadata
 }
@@ -72,7 +62,7 @@ func ResolveMetadataType(kind string) (string, bool) {
 	return "", false
 }
 
-func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
+func ParseMetadata(raw []byte, cas []*x509.Certificate) (*store.EntryInfo, error) {
 	// compute the id over the data (the id of a metadata item is the digest of its entire signed blob)
 	digest := sha256.Sum256(raw)
 	id := hex.EncodeToString(digest[:])
@@ -131,30 +121,33 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
 	}
 
 	// validate the integrity and consistency of the data
+	var versionTime time.Time
 	if !IsSupportedMetadataType(meta.Type) {
 		return nil, fmt.Errorf("unsupported metadata type (%v)", meta.Type)
 	}
 	if !RegexNameCheck.MatchString(meta.Name) {
 		return nil, fmt.Errorf("%v has malformed name (%v)", meta.Type, meta.Name)
 	}
-	if _, err := time.Parse(time.RFC3339, meta.Version); err != nil {
+	if versionTime, err = time.Parse(time.RFC3339, meta.Version); err != nil {
 		return nil, fmt.Errorf("%v %v has malformed version (%v): %w", meta.Type, meta.Name, meta.Version, err)
 	}
 
-	// assemble the new parsed metadata structure (leave creation time empty, will be populated by caller)
-	entry := &MetadataInfo{
-		Id:      id,
-		Type:    meta.Type,
-		Name:    meta.Name,
-		Version: meta.Version,
-		Signer:  signer,
-		Created: "",
-		Format:  strings.ToLower(serializer.String()),
+	// assemble the new parsed metadata structure (leave creation time, and origin empty, will be populated by caller)
+	entry := &store.EntryInfo{
+		Id:          id,
+		Type:        meta.Type,
+		Name:        meta.Name,
+		Version:     meta.Version,
+		VersionTime: versionTime.UnixNano(),
+		Signer:      signer,
+		Format:      strings.ToLower(serializer.String()),
+		Created:     "",
+		Origin:      "",
 	}
 	log.Debugf("Parsed %v %v (id %v; version %v; signer %v)", entry.Type, entry.Name, entry.Id, entry.Version, entry.Signer)
 	return entry, nil
 }
-func UnpackMetadata(entry *store.EntryInfo, raw []byte, parse bool) (*MetadataFull, error) {
+func UnpackMetadata(entry *store.EntryInfo, raw []byte, parse bool) (*MetadataBundle, error) {
 	// parse and unpack the stored metadata
 	if entry == nil {
 		return nil, nil
@@ -162,7 +155,7 @@ func UnpackMetadata(entry *store.EntryInfo, raw []byte, parse bool) (*MetadataFu
 
 	// check if the data dont need to be parsed
 	if !parse {
-		return &MetadataFull{Info: LoadMetadataInfo(entry), Raw: raw}, nil
+		return &MetadataBundle{Info: *entry, Raw: raw}, nil
 	}
 
 	// detect the serialization of the data
@@ -182,39 +175,9 @@ func UnpackMetadata(entry *store.EntryInfo, raw []byte, parse bool) (*MetadataFu
 		return nil, fmt.Errorf("failed to unpack metadata: %w", err)
 	}
 
-	// return the unpacked full information (no need to validate the state or consistency as the data come from a trusted state)
-	return &MetadataFull{
-		Info:   LoadMetadataInfo(entry),
-		Raw:    raw,
-		parsed: meta,
-	}, nil
-}
-func LoadMetadataInfo(entry *store.EntryInfo) MetadataInfo {
-	return MetadataInfo{
-		Id:      entry.Id,
-		Type:    entry.Type,
-		Name:    entry.Name,
-		Version: entry.Version,
-		Signer:  entry.Signer,
-		Created: entry.Created,
-		Format:  entry.Format,
-	}
-}
-func StoreMetadata(entry *MetadataInfo) (*store.EntryInfo, error) {
-	versionTime, err := time.Parse(time.RFC3339, entry.Version)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse version time: %w", err)
-	}
-	return &store.EntryInfo{
-		Id:          entry.Id,
-		Type:        entry.Type,
-		Name:        entry.Name,
-		Version:     entry.Version,
-		VersionTime: versionTime.UnixNano(),
-		Signer:      entry.Signer,
-		Format:      entry.Format,
-		Created:     entry.Created,
-	}, nil
+	// return the unpacked full information (no need to validate the state or
+	// consistency against the parsed data as the data come from a trusted source)
+	return &MetadataBundle{Info: *entry, Raw: raw, parsed: meta}, nil
 }
 
 type MetadataIdentifier struct {
@@ -224,14 +187,14 @@ type MetadataIdentifier struct {
 
 type MetadataResolver struct {
 	processed map[string]bool
-	loaded    []*MetadataFull
+	loaded    []*MetadataBundle
 	Open      []MetadataIdentifier
-	Entries   map[string]*MetadataFull
+	Entries   map[string]*MetadataBundle
 }
 
 func NewMetadataResolver() *MetadataResolver {
 	return &MetadataResolver{
-		Entries:   make(map[string]*MetadataFull),
+		Entries:   make(map[string]*MetadataBundle),
 		processed: make(map[string]bool),
 	}
 }
@@ -285,7 +248,7 @@ func (s *MetadataResolver) Flush() {
 	}
 	s.loaded = s.loaded[:0]
 }
-func (s *MetadataResolver) AddLoaded(name, kind string, entry *MetadataFull) bool {
+func (s *MetadataResolver) AddLoaded(name, kind string, entry *MetadataBundle) bool {
 	// check if an entry was loaded and add it to the list of seen manifests to prevent it from being requested later on again
 	if entry != nil {
 		if entry.Info.Type == ar.TYPE_MANIFEST {

@@ -34,8 +34,7 @@ type SQLite struct {
 var _ store.Index = (*SQLite)(nil)
 
 const (
-	tableQuery  = "id, type, name, version, version_time, signer, format, created"
-	selectQuery = "sequence, " + tableQuery
+	tableQuery = "id, type, name, version, version_time, signer, format, origin, created"
 
 	// wait for concurrent writers instead of failing immediately, and do not let writers block readers
 	openOptions = "?_busy_timeout=5000&_journal_mode=WAL"
@@ -62,6 +61,7 @@ func NewSQLiteIndex(path string) (*SQLite, error) {
 	version_time INTEGER NOT NULL,
 	signer TEXT NOT NULL,
 	format TEXT NOT NULL,
+	origin TEXT NOT NULL,
 	created TEXT NOT NULL
 	)`); err != nil {
 		db.Close()
@@ -83,8 +83,8 @@ func (s *SQLite) Close() {
 
 func (s *SQLite) Insert(ctx context.Context, e store.EntryInfo) (bool, error) {
 	// try to insert the entry into the table
-	exec := fmt.Sprintf(`INSERT OR IGNORE INTO metadata (%v) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, tableQuery)
-	res, err := s.db.ExecContext(ctx, exec, e.Id, e.Type, e.Name, e.Version, e.VersionTime, e.Signer, e.Format, e.Created)
+	exec := fmt.Sprintf(`INSERT OR IGNORE INTO metadata (%v) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, tableQuery)
+	res, err := s.db.ExecContext(ctx, exec, e.Id, e.Type, e.Name, e.Version, e.VersionTime, e.Signer, e.Format, e.Origin, e.Created)
 	if err != nil {
 		return false, fmt.Errorf("failed to insert into sqlite3 database: %w", err)
 	}
@@ -98,7 +98,7 @@ func (s *SQLite) Insert(ctx context.Context, e store.EntryInfo) (bool, error) {
 }
 
 func (s *SQLite) ByID(ctx context.Context, id string) (*store.EntryInfo, error) {
-	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE id = ? LIMIT 1", selectQuery), id)
+	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE id = ? LIMIT 1", tableQuery), id)
 }
 
 func (s *SQLite) Latest(ctx context.Context, kind, name string, signer *string) (*store.EntryInfo, error) {
@@ -109,7 +109,7 @@ func (s *SQLite) Latest(ctx context.Context, kind, name string, signer *string) 
 		args = append(args, signer)
 	}
 
-	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE type = ? AND name = ?%v ORDER BY version_time DESC, sequence DESC LIMIT 1", selectQuery, filter), args...)
+	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE type = ? AND name = ?%v ORDER BY version_time DESC, sequence DESC LIMIT 1", tableQuery, filter), args...)
 }
 
 func (s *SQLite) List(ctx context.Context, f store.Filter, offset uint) ([]store.EntryInfo, error) {
@@ -130,7 +130,7 @@ func (s *SQLite) List(ctx context.Context, f store.Filter, offset uint) ([]store
 
 	// perform the actual query for the given information (sequence as final criteria to ensure a stable order across pages)
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %v FROM metadata %v ORDER BY type, name, version_time DESC, sequence DESC LIMIT ? OFFSET ?",
-		selectQuery, filter), args...)
+		tableQuery, filter), args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sqlite3 database: %w", err)
 	}
@@ -165,7 +165,7 @@ func rowsToEntries(rows *sql.Rows) ([]store.EntryInfo, error) {
 	// iterate over all entries in the sql selection and unpack them
 	for rows.Next() {
 		var e store.EntryInfo
-		if err := rows.Scan(&e.Sequence, &e.Id, &e.Type, &e.Name, &e.Version, &e.VersionTime, &e.Signer, &e.Format, &e.Created); err != nil {
+		if err := rows.Scan(&e.Id, &e.Type, &e.Name, &e.Version, &e.VersionTime, &e.Signer, &e.Format, &e.Origin, &e.Created); err != nil {
 			return nil, fmt.Errorf("failed to unpack row: %w", err)
 		}
 		entries = append(entries, e)
