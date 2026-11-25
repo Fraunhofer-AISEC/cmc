@@ -467,15 +467,17 @@ func ParsePrivateKey(data []byte) (crypto.PrivateKey, error) {
 		data = privPem.Bytes
 	}
 
-	priv, err := x509.ParsePKCS8PrivateKey(data)
-	if err != nil {
-		priv, err = x509.ParseECPrivateKey(data)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key: %w", err)
-		}
+	if priv, err := x509.ParsePKCS8PrivateKey(data); err == nil {
+		return priv, nil
+	}
+	if priv, err := x509.ParseECPrivateKey(data); err == nil {
+		return priv, nil
+	}
+	if priv, err := x509.ParsePKCS1PrivateKey(data); err == nil {
+		return priv, nil
 	}
 
-	return priv, nil
+	return nil, errors.New("failed to parse private key: unsupported format (PKCS#8, SEC 1 or PKCS#1 expected)")
 }
 
 func ParsePublicKey(data []byte) (crypto.PublicKey, error) {

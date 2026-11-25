@@ -19,7 +19,6 @@ import (
 	"crypto"
 	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -29,40 +28,31 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-type Serializer interface {
-	Sign(data []byte, keys []crypto.PrivateKey, x5cs [][]*x509.Certificate) ([]byte, error)
+type serializer interface {
+	sign(data []byte, signers []crypto.Signer, x5cs [][]*x509.Certificate) ([]byte, error)
+	verify(signed, data []byte, keys []crypto.PublicKey) error
 }
 
+// Sign signs data with the PEM encoded private keys and certificate chains
 func Sign(data []byte, keysPem [][]byte, chainsPem [][][]byte) ([]byte, error) {
 
-	// Load keys
-	keys := make([]crypto.PrivateKey, 0)
-	for _, keyPem := range keysPem {
-		block, _ := pem.Decode(keyPem)
-		if block == nil || !strings.Contains(block.Type, "PRIVATE KEY") {
-			return nil, errors.New("failed to decode PEM block containing private key")
+	signers := make([]crypto.Signer, 0, len(keysPem))
+	for i, keyPem := range keysPem {
+		key, err := internal.ParsePrivateKey(keyPem)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key %v: %w", i, err)
 		}
-
-		key, err := x509.ParseECPrivateKey(block.Bytes)
-		if err == nil {
-			keys = append(keys, key)
-		} else {
-			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse private key: %w", err)
-			}
-			keys = append(keys, key)
+		signer, ok := key.(crypto.Signer)
+		if !ok {
+			return nil, fmt.Errorf("private key %v of type %T cannot sign", i, key)
 		}
+		signers = append(signers, signer)
 	}
-	if len(keys) == 0 {
-		return nil, errors.New("no valid keys specified")
-	}
-	log.Tracef("Read %v private keys", len(keys))
+	log.Tracef("Read %v private keys", len(signers))
 
-	// Load certificate chains
-	certChains := make([][]*x509.Certificate, 0)
+	certChains := make([][]*x509.Certificate, 0, len(chainsPem))
 	for i, chainPem := range chainsPem {
-		certChain := make([]*x509.Certificate, 0)
+		certChain := make([]*x509.Certificate, 0, len(chainPem))
 		for _, certPem := range chainPem {
 			c, err := internal.ParseCert(certPem)
 			if err != nil {
@@ -75,35 +65,59 @@ func Sign(data []byte, keysPem [][]byte, chainsPem [][][]byte) ([]byte, error) {
 		}
 		certChains = append(certChains, certChain)
 	}
-	if len(certChains) == 0 {
-		return nil, errors.New("no valid certificates specified")
-	}
 	log.Tracef("Read %v certificate chains", len(certChains))
 
-	if len(certChains) != len(keys) {
-		return nil, fmt.Errorf("number of certificates (%v) does not match number of keys (%v)",
-			len(certChains), len(keys))
+	return signWith(data, signers, certChains)
+}
+
+// signWith signs data with arbitrary signers, e.g. keys held in a KMS or HSM. Each signer must
+// match the leaf certificate of its chain. The signed output is verified before it is returned.
+func signWith(data []byte, signers []crypto.Signer, certChains [][]*x509.Certificate) ([]byte, error) {
+
+	if len(signers) == 0 {
+		return nil, errors.New("no valid keys specified")
+	}
+	if len(certChains) != len(signers) {
+		return nil, fmt.Errorf("number of certificate chains (%v) does not match number of keys (%v)",
+			len(certChains), len(signers))
+	}
+
+	leafKeys := make([]crypto.PublicKey, 0, len(signers))
+	for i, signer := range signers {
+		if len(certChains[i]) == 0 {
+			return nil, fmt.Errorf("certificate chain %v is empty", i)
+		}
+		leaf := certChains[i][0]
+		pub, ok := signer.Public().(interface{ Equal(crypto.PublicKey) bool })
+		if !ok || !pub.Equal(leaf.PublicKey) {
+			return nil, fmt.Errorf("key %v does not match public key of leaf certificate %q",
+				i, leaf.Subject.CommonName)
+		}
+		leafKeys = append(leafKeys, leaf.PublicKey)
 	}
 
 	// Detect serialization format. Currently, JSON and CBOR are supported
-	var s Serializer
+	var s serializer
 	if json.Valid(data) {
 		log.Trace("Detected JSON serialization")
-		s = JsonSerializer{}
+		s = jsonSerializer{}
 	} else if err := cbor.Wellformed(data); err == nil {
 		log.Trace("Detected CBOR serialization")
-		s = CborSerializer{}
+		s = cborSerializer{}
 	} else {
 		return nil, errors.New("failed to detect serialization (only JSON and CBOR are supported)")
 	}
 
-	// Sign metadata
-	signedData, err := s.Sign(data, keys, certChains)
+	signedData, err := s.sign(data, signers, certChains)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign data: %w", err)
 	}
 
-	log.Trace("Signed metadata")
+	if err := s.verify(signedData, data, leafKeys); err != nil {
+		return nil, fmt.Errorf("failed to verify signed data: %w", err)
+	}
+
+	log.Trace("Signed and verified metadata")
 
 	return signedData, nil
 }

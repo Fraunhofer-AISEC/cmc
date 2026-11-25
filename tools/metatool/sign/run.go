@@ -50,7 +50,7 @@ var Command = &cli.Command{
 		},
 		&cli.StringFlag{
 			Name:     keysFlag,
-			Usage:    "paths to keys in PEM format, comma-separated",
+			Usage:    "paths to PEM encoded private keys (PKCS#8, SEC 1 or PKCS#1), comma-separated. Supported are ECDSA P-256/P-384/P-521, Ed25519 and RSA 2048/3072/4096 (RSA-PSS). Each key must match the leaf certificate of the corresponding chain",
 			Required: true,
 		},
 		&cli.StringFlag{

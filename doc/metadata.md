@@ -116,6 +116,18 @@ Metadata can be signed during creation with the [metatool](../tools/metatool/) (
 `metatool create --help` and the available subcommands for usage), or, after creation, via the
 `metatool sign` command (see `metatool sign --help`).
 
+The signature algorithm is derived from the signing key and is the same for JSON (JWS) and
+CBOR (COSE):
+
+| Key | Algorithm |
+|---|---|
+| ECDSA P-256, P-384, P-521 | `ES256`, `ES384`, `ES512` |
+| Ed25519 | `EdDSA` |
+| RSA 2048, 3072, 4096 | `PS256`, `PS384`, `PS512` (RSASSA-PSS) |
+
+Each key must match the public key of the leaf certificate of its chain. The signed output is
+verified before it is written.
+
 For an example, refer to the example signing script:
 ```sh
 sign-metadata json

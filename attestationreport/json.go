@@ -27,6 +27,17 @@ import (
 	"github.com/go-jose/go-jose/v4"
 )
 
+// JwsAlgorithms are the signature algorithms accepted for JWS verification
+var JwsAlgorithms = []jose.SignatureAlgorithm{
+	jose.PS256,
+	jose.PS384,
+	jose.PS512,
+	jose.ES256,
+	jose.ES384,
+	jose.ES512,
+	jose.EdDSA,
+}
+
 type jsonSerializer struct{}
 
 func NewJsonSerializer() (jsonSerializer, error) {
@@ -39,13 +50,7 @@ func (s jsonSerializer) String() string {
 
 func (s jsonSerializer) GetPayload(raw []byte) ([]byte, error) {
 	// Extract plain payload out of base64-encoded JSON Web Signature
-	jws, err := jose.ParseSigned(string(raw), []jose.SignatureAlgorithm{
-		jose.RS256,
-		jose.RS512,
-		jose.ES256,
-		jose.ES384,
-		jose.ES512,
-	})
+	jws, err := jose.ParseSigned(string(raw), JwsAlgorithms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse jws object: %v", err)
 	}
@@ -79,13 +84,7 @@ func (s jsonSerializer) Verify(data []byte, verifier Verifier) ([]byte, []Signat
 	log.Tracef("Verifying JWS object...")
 
 	// Parse the signed JWS object
-	jwsData, err := jose.ParseSigned(string(data), []jose.SignatureAlgorithm{
-		jose.RS256,
-		jose.RS512,
-		jose.ES256,
-		jose.ES384,
-		jose.ES512,
-	})
+	jwsData, err := jose.ParseSigned(string(data), JwsAlgorithms)
 	if err != nil {
 		result.Fail(ParseJSON, err)
 		return nil, sigs, result
