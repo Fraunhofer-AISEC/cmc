@@ -22,6 +22,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -72,45 +73,60 @@ func ResolveMetadataType(kind string) (string, bool) {
 }
 
 func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
-	// detect the serialization of the data
-	serializer, err := ar.DetectSerialization(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to detect serialization: %w", err)
-	}
-	log.Tracef("Detected %v serialization", serializer.String())
+	// compute the id over the data (the id of a metadata item is the digest of its entire signed blob)
+	digest := sha256.Sum256(raw)
+	id := hex.EncodeToString(digest[:])
 
-	// verify the payload against the trusted certificates
-	res, payload, ok := serializer.Verify(raw, cas)
-	if !ok {
+	// verify the metadata matches the signature and unpack them
+	meta, res := ar.ParseAndVerifyMetadataItem(id, raw, cas)
+	if meta == nil || res.Summary.Status != ar.StatusSuccess {
 		// collect all relevant error information
-		results, parts := []ar.Result{res.Summary}, make([]string, 0)
+		results, parts := []ar.Result{res.Summary, res.ValidityCheck}, make([]string, 0)
 		for _, sig := range res.SignatureCheck {
 			results = append(results, sig.CertChainCheck, sig.SignCheck)
 		}
 
 		// concat all error codes and details into an error description
+		add := func(part string) {
+			if part != "" && !slices.Contains(parts, part) {
+				parts = append(parts, part)
+			}
+		}
 		for _, r := range results {
 			for _, code := range r.ErrorCodes {
-				parts = append(parts, code.String())
+				add(code.String())
 			}
-			if r.Details != "" {
-				parts = append(parts, r.Details)
-			}
+			add(r.Details)
+		}
+		if meta != nil && meta.Validity == nil {
+			add("missing validity information")
 		}
 		if len(parts) == 0 {
 			parts = append(parts, "unknown error")
 		}
-		return nil, fmt.Errorf("failed to verify signature: %v", strings.Join(parts, ", "))
-	}
-	signer, err := ExtractSigner(&res)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract signer: %w", err)
+		return nil, fmt.Errorf("failed to verify metadata: %v", strings.Join(parts, ", "))
 	}
 
-	// unpack the metadata structure using the corresponding serializer
-	meta := &ar.Metadata{}
-	if err := serializer.Unmarshal(payload, meta); err != nil {
-		return nil, fmt.Errorf("failed to unpack metadata: %w", err)
+	// compute the signer identifier (the validated chains start with the
+	// leaf certificate; all chains of a signature share the same leaf)
+	var signer string
+	if len(res.SignatureCheck) == 0 {
+		return nil, fmt.Errorf("no signatures found for signer")
+	} else if len(res.SignatureCheck) > 1 {
+		log.Warnf("Metadata has %v signatures, only the first one is tracked as signer", len(res.SignatureCheck))
+	} else if chains := res.SignatureCheck[0].Certs; len(chains) == 0 || len(chains[0]) == 0 {
+		return nil, fmt.Errorf("no validated certificate chain found for signer")
+	} else if block, _ := pem.Decode([]byte(chains[0][0].PublicKey)); block == nil {
+		return nil, fmt.Errorf("failed to decode public key of signing certificate")
+	} else {
+		digest := sha256.Sum256(block.Bytes)
+		signer = hex.EncodeToString(digest[:])
+	}
+
+	// detect the serialization format of the blob (should not fail anymore, as the blob has already been verified)
+	serializer, err := ar.DetectSerialization(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect serialization: %w", err)
 	}
 
 	// validate the integrity and consistency of the data
@@ -124,15 +140,7 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
 		return nil, fmt.Errorf("%v %v has malformed version (%v): %w", meta.Type, meta.Name, meta.Version, err)
 	}
 
-	// compute the id over the data (and as sanity-check, validate the regex)
-	digest := sha256.Sum256(raw)
-	id := strings.ToLower(hex.EncodeToString(digest[:]))
-	if !RegexHashCheck.MatchString(id) {
-		return nil, fmt.Errorf("%v %v has malformed id (%v)", meta.Type, meta.Name, id)
-	}
-
-	// assemble the new parsed metadata structure (leave creation time empty, will be populated by
-	// caller, the signer is only known if signatures have been verified otherwise leave it empty)
+	// assemble the new parsed metadata structure (leave creation time empty, will be populated by caller)
 	entry := &MetadataInfo{
 		Id:      id,
 		Type:    meta.Type,
@@ -144,26 +152,6 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
 	}
 	log.Debugf("Parsed %v %v (id %v; version %v; signer %v)", entry.Type, entry.Name, entry.Id, entry.Version, entry.Signer)
 	return entry, nil
-}
-func ExtractSigner(res *ar.MetadataResult) (string, error) {
-	if len(res.SignatureCheck) == 0 {
-		return "", fmt.Errorf("no signatures found")
-	}
-	if len(res.SignatureCheck) > 1 {
-		log.Warnf("Metadata has %v signatures, only the first one is tracked as signer", len(res.SignatureCheck))
-	}
-
-	// the validated chains start with the leaf certificate (all chains of a signature share the same leaf)
-	chains := res.SignatureCheck[0].Certs
-	if len(chains) == 0 || len(chains[0]) == 0 {
-		return "", fmt.Errorf("no validated certificate chain found")
-	}
-	block, _ := pem.Decode([]byte(chains[0][0].PublicKey))
-	if block == nil {
-		return "", fmt.Errorf("failed to decode public key of signing certificate")
-	}
-	digest := sha256.Sum256(block.Bytes)
-	return hex.EncodeToString(digest[:]), nil
 }
 func UnpackMetadata(entry *store.EntryInfo, raw []byte) (*MetadataFull, error) {
 	// parse and unpack the stored metadata
