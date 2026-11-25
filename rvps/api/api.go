@@ -18,8 +18,9 @@ package api
 const Version = "0.1.0"
 
 type QueryNameEntry struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Signer string `json:"signer,omitempty"`
 }
 
 type QueryRequest struct {

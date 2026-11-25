@@ -33,19 +33,29 @@ type SQLite struct {
 // test interface compatibility
 var _ store.Index = (*SQLite)(nil)
 
-const tableQuery = "id, type, name, version, version_time, signer, format, created"
+const (
+	tableQuery  = "id, type, name, version, version_time, signer, format, created"
+	selectQuery = "sequence, " + tableQuery
+
+	// wait for concurrent writers instead of failing immediately, and do not let writers block readers
+	openOptions = "?_busy_timeout=5000&_journal_mode=WAL"
+)
 
 func NewSQLiteIndex(path string) (*SQLite, error) {
 	log.Infof("Loading sqlite3 index %v", path)
 
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite3", path+openOptions)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load sqlite3 database: %w", err)
 	}
 
+	// serialize all access to database to prevent errors (sqlite3 only supports a single writer)
+	db.SetMaxOpenConns(1)
+
 	// check if the metadata table already exists or create it
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS metadata (
-	id TEXT PRIMARY KEY,
+	sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+	id TEXT NOT NULL UNIQUE,
 	type TEXT NOT NULL,
 	name TEXT NOT NULL,
 	version TEXT NOT NULL,
@@ -88,7 +98,7 @@ func (s *SQLite) Insert(ctx context.Context, e store.EntryInfo) (bool, error) {
 }
 
 func (s *SQLite) ByID(ctx context.Context, id string) (*store.EntryInfo, error) {
-	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE id = ? LIMIT 1", tableQuery), id)
+	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE id = ? LIMIT 1", selectQuery), id)
 }
 
 func (s *SQLite) Latest(ctx context.Context, kind, name string, signer *string) (*store.EntryInfo, error) {
@@ -99,7 +109,7 @@ func (s *SQLite) Latest(ctx context.Context, kind, name string, signer *string) 
 		args = append(args, signer)
 	}
 
-	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE type = ? AND name = ?%v ORDER BY version_time DESC LIMIT 1", tableQuery, filter), args...)
+	return s.fetch(ctx, fmt.Sprintf("SELECT %v FROM metadata WHERE type = ? AND name = ?%v ORDER BY version_time DESC, sequence DESC LIMIT 1", selectQuery, filter), args...)
 }
 
 func (s *SQLite) List(ctx context.Context, f store.Filter, offset uint) ([]store.EntryInfo, error) {
@@ -118,9 +128,9 @@ func (s *SQLite) List(ctx context.Context, f store.Filter, offset uint) ([]store
 	}
 	args = append(args, store.ListPageSize, int64(offset))
 
-	// perform the actual query for the given information (id as final criteria to ensure a stable order across pages)
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %v FROM metadata %v ORDER BY type, name, version_time DESC, id LIMIT ? OFFSET ?",
-		tableQuery, filter), args...)
+	// perform the actual query for the given information (sequence as final criteria to ensure a stable order across pages)
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %v FROM metadata %v ORDER BY type, name, version_time DESC, sequence DESC LIMIT ? OFFSET ?",
+		selectQuery, filter), args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sqlite3 database: %w", err)
 	}
@@ -155,7 +165,7 @@ func rowsToEntries(rows *sql.Rows) ([]store.EntryInfo, error) {
 	// iterate over all entries in the sql selection and unpack them
 	for rows.Next() {
 		var e store.EntryInfo
-		if err := rows.Scan(&e.Id, &e.Type, &e.Name, &e.Version, &e.VersionTime, &e.Signer, &e.Format, &e.Created); err != nil {
+		if err := rows.Scan(&e.Sequence, &e.Id, &e.Type, &e.Name, &e.Version, &e.VersionTime, &e.Signer, &e.Format, &e.Created); err != nil {
 			return nil, fmt.Errorf("failed to unpack row: %w", err)
 		}
 		entries = append(entries, e)

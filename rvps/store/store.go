@@ -21,6 +21,7 @@ import "context"
 const ListPageSize = 100
 
 type EntryInfo struct {
+	Sequence    int64
 	Id          string
 	Type        string
 	Name        string

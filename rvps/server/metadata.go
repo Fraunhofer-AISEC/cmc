@@ -112,13 +112,14 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
 	var signer string
 	if len(res.SignatureCheck) == 0 {
 		return nil, fmt.Errorf("no signatures found for signer")
-	} else if len(res.SignatureCheck) > 1 {
-		log.Warnf("Metadata has %v signatures, only the first one is tracked as signer", len(res.SignatureCheck))
 	} else if chains := res.SignatureCheck[0].Certs; len(chains) == 0 || len(chains[0]) == 0 {
 		return nil, fmt.Errorf("no validated certificate chain found for signer")
 	} else if block, _ := pem.Decode([]byte(chains[0][0].PublicKey)); block == nil {
 		return nil, fmt.Errorf("failed to decode public key of signing certificate")
 	} else {
+		if len(res.SignatureCheck) > 1 {
+			log.Warnf("Metadata has %v signatures, only the first one is tracked as signer", len(res.SignatureCheck))
+		}
 		digest := sha256.Sum256(block.Bytes)
 		signer = hex.EncodeToString(digest[:])
 	}
@@ -153,10 +154,15 @@ func ParseMetadata(raw []byte, cas []*x509.Certificate) (*MetadataInfo, error) {
 	log.Debugf("Parsed %v %v (id %v; version %v; signer %v)", entry.Type, entry.Name, entry.Id, entry.Version, entry.Signer)
 	return entry, nil
 }
-func UnpackMetadata(entry *store.EntryInfo, raw []byte) (*MetadataFull, error) {
+func UnpackMetadata(entry *store.EntryInfo, raw []byte, parse bool) (*MetadataFull, error) {
 	// parse and unpack the stored metadata
 	if entry == nil {
 		return nil, nil
+	}
+
+	// check if the data dont need to be parsed
+	if !parse {
+		return &MetadataFull{Info: LoadMetadataInfo(entry), Raw: raw}, nil
 	}
 
 	// detect the serialization of the data
@@ -211,7 +217,7 @@ func StoreMetadata(entry *MetadataInfo) (*store.EntryInfo, error) {
 	}, nil
 }
 
-type MetadataNameIdentifier struct {
+type MetadataIdentifier struct {
 	Name string
 	Type string
 }
@@ -219,7 +225,7 @@ type MetadataNameIdentifier struct {
 type MetadataResolver struct {
 	processed map[string]bool
 	loaded    []*MetadataFull
-	Open      []MetadataNameIdentifier
+	Open      []MetadataIdentifier
 	Entries   map[string]*MetadataFull
 }
 
@@ -262,7 +268,7 @@ func (s *MetadataResolver) Continue() bool {
 		// add all of the linked manifests to the open list and mark them as loaded/being loaded
 		for _, name := range linkedManifests {
 			if !s.processed[name] {
-				s.Open = append(s.Open, MetadataNameIdentifier{Name: name, Type: ar.TYPE_MANIFEST})
+				s.Open = append(s.Open, MetadataIdentifier{Name: name, Type: ar.TYPE_MANIFEST})
 				s.processed[name] = true
 			}
 		}
