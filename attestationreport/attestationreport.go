@@ -482,8 +482,10 @@ type NvidiaExtraSecurityPolicy struct {
 	RequireGspDefault     *bool  `json:"requireGspDefault,omitempty" cbor:"9,keyasint,omitempty"`
 	RequireInforomValid   *bool  `json:"requireInforomValid,omitempty" cbor:"10,keyasint,omitempty"`
 
-	MigCurrentModeExpected *uint32  `json:"migCurrentModeExpected,omitempty" cbor:"11,keyasint,omitempty"`
-	MigPendingModeExpected *uint32  `json:"migPendingModeExpected,omitempty" cbor:"12,keyasint,omitempty"`
+	MigCurrentModeExpected *uint32 `json:"migCurrentModeExpected,omitempty" cbor:"11,keyasint,omitempty"`
+	MigPendingModeExpected *uint32 `json:"migPendingModeExpected,omitempty" cbor:"12,keyasint,omitempty"`
+	// InforomConfigChecksums is an allowlist of 32-bit checksums formatted as lowercase hex
+	// with 0x prefix and eight digits, e.g. 0x1a2b3c4d
 	InforomConfigChecksums []string `json:"inforomConfigChecksums,omitempty" cbor:"13,keyasint,omitempty"`
 }
 
