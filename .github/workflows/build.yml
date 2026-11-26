@@ -85,6 +85,8 @@ jobs:
           misspell .
       - name: Test
         run: go test ./...
+      - name: Test cgo packages with AddressSanitizer
+        run: go test -asan ./drivers/nvidiadriver ./attestationpolicies/duktape
       - name: "Upload cmcd"
         uses: actions/upload-artifact@v7
         with:
