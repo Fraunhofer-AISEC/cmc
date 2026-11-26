@@ -124,8 +124,8 @@ func (nvidia *Nvidia) savePersistentCerts(certs map[string]string) {
 func (nvidia *Nvidia) Init(c *drivers.DriverConfig) error {
 	var err error
 
-	if nvmlInitErr != nil {
-		return fmt.Errorf("failed to initialize NVML: %w", nvmlInitErr)
+	if err := nvmlLoad(); err != nil {
+		return fmt.Errorf("failed to initialize NVML: %w", err)
 	}
 
 	nvidia.DriverConfig = c

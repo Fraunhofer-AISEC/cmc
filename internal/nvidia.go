@@ -33,7 +33,8 @@ const (
 // NvidiaDeviceUnsignedEvidence holds measurements the driver queries from NVML which are
 // not covered by the signed GPU attestation report. They are only collected when the
 // driver runs with extended checks enabled, and are only evaluated against an
-// ar.NvidiaExtraSecurityPolicy.
+// ar.NvidiaExtraSecurityPolicy. InforomConfigChecksum is the 32-bit checksum formatted as
+// lowercase hex with 0x prefix and eight digits, e.g. 0x1a2b3c4d.
 type NvidiaDeviceUnsignedEvidence struct {
 	UUID                  string `json:"uuid" cbor:"0,keyasint"`
 	InforomOemVersion     string `json:"inforomOemVersion" cbor:"1,keyasint"`

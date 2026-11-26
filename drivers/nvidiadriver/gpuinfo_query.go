@@ -31,6 +31,7 @@ package nvidiadriver
 #define NVML_GPU_ATTESTATION_CERT_CHAIN_SIZE      0x1400
 #define NVML_DEVICE_UUID_V2_BUFFER_SIZE           96
 #define NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE   16
+#define NVML_GSP_FIRMWARE_VERSION_BUF_SIZE        0x40
 
 typedef struct {
     unsigned int  certChainSize;
@@ -76,21 +77,21 @@ typedef enum nvmlInforomObject_enum
 // X-macro table: X(Name, ReturnType, ParamDecls, CallArgs, NvmlSymbol)
 // ---------------------------------------------------------------------------
 #define NVML_FN_TABLE(X) \
-    X(Init,     nvmlReturn_t, (void),                                                                     (),           nvmlInit) \
+    X(Init,     nvmlReturn_t, (void),                                                                     (),           nvmlInit_v2) \
     X(Shutdown, nvmlReturn_t, (void),                                                                     (),           nvmlShutdown) \
     X(ErrStr,   const char*,  (nvmlReturn_t r),                                                           (r),          nvmlErrorString) \
-    X(GetCount, nvmlReturn_t, (unsigned int *n),                                                          (n),          nvmlDeviceGetCount) \
-    X(GetHandle,nvmlReturn_t, (unsigned int i, nvmlDevice_t *d),                                          (i, d),       nvmlDeviceGetHandleByIndex) \
+    X(GetCount, nvmlReturn_t, (unsigned int *n),                                                          (n),          nvmlDeviceGetCount_v2) \
+    X(GetHandle,nvmlReturn_t, (unsigned int i, nvmlDevice_t *d),                                          (i, d),       nvmlDeviceGetHandleByIndex_v2) \
     X(GetName,  nvmlReturn_t, (nvmlDevice_t d, char *b, unsigned int l),                                  (d, b, l),    nvmlDeviceGetName) \
     X(GetVbios, nvmlReturn_t, (nvmlDevice_t d, char *b, unsigned int l),                                  (d, b, l),    nvmlDeviceGetVbiosVersion) \
     X(GetDriver,nvmlReturn_t, (char *b, unsigned int l),                                                  (b, l),       nvmlSystemGetDriverVersion) \
     X(DeviceGetConfComputeGpuCertificate, nvmlReturn_t, (nvmlDevice_t d, nvmlConfComputeGpuCertificate_t *c), (d, c),  nvmlDeviceGetConfComputeGpuCertificate) \
-    X(DeviceGetUUID, nvmlReturn_t, (nvmlDevice_t d, char *b),                                             (d, b),       nvmlDeviceGetUUID) \
+    X(DeviceGetUUID, nvmlReturn_t, (nvmlDevice_t d, char *b, unsigned int l),                             (d, b, l),    nvmlDeviceGetUUID) \
     X(DeviceGetInforomVersion, nvmlReturn_t, (nvmlDevice_t device, nvmlInforomObject_t object, char *version, unsigned int length), (device, object, version, length), nvmlDeviceGetInforomVersion) \
     X(DeviceGetInforomImageVersion, nvmlReturn_t, (nvmlDevice_t device, char *version, unsigned int length), (device, version, length), nvmlDeviceGetInforomImageVersion) \
-    X(DeviceGetInforomConfigurationChecksum , nvmlReturn_t, (nvmlDevice_t device, char *checksum), (device, checksum), nvmlDeviceGetInforomConfigurationChecksum ) \
+    X(DeviceGetInforomConfigurationChecksum, nvmlReturn_t, (nvmlDevice_t device, unsigned int *checksum), (device, checksum), nvmlDeviceGetInforomConfigurationChecksum) \
     X(DeviceGetConfComputeGpuAttestationReport, nvmlReturn_t ,(nvmlDevice_t device, nvmlConfComputeGpuAttestationReport_t* gpuAtstReport), (device, gpuAtstReport), nvmlDeviceGetConfComputeGpuAttestationReport) \
-	X(DeviceGetGspFirmwareVersion, nvmlReturn_t, (nvmlDevice_t device, char *version), (device, version), nvmlDeviceGetGspFirmwareVersion) \
+    X(DeviceGetGspFirmwareVersion, nvmlReturn_t, (nvmlDevice_t device, char *version), (device, version), nvmlDeviceGetGspFirmwareVersion) \
     X(DeviceGetGspFirmwareMode, nvmlReturn_t, (nvmlDevice_t device, unsigned int *isEnabled, unsigned int *defaultMode), (device, isEnabled, defaultMode), nvmlDeviceGetGspFirmwareMode) \
     X(DeviceValidateInforom, nvmlReturn_t, (nvmlDevice_t device), (device), nvmlDeviceValidateInforom) \
     X(DeviceGetMigMode, nvmlReturn_t, (nvmlDevice_t device, unsigned int *currentMode, unsigned int *pendingMode), (device, currentMode, pendingMode), nvmlDeviceGetMigMode)
@@ -113,9 +114,8 @@ NVML_FN_TABLE(_STATIC)
 
 NVML_FN_TABLE(_WRAP)
 
-static const char* nvml_open(void) {
-    _lib = dlopen("libnvidia-ml.so.1", RTLD_LAZY | RTLD_GLOBAL);
-    if (!_lib) _lib = dlopen("libnvidia-ml.so", RTLD_LAZY | RTLD_GLOBAL);
+static const char* nvml_open(const char *path) {
+    _lib = dlopen(path, RTLD_LAZY | RTLD_GLOBAL);
     if (!_lib) return dlerror();
 
     #define _LOAD(Name, Ret, Params, Args, Sym)  _##Name = (fn_##Name) dlsym(_lib, #Sym);
@@ -130,24 +130,40 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"strings"
+	"sync"
 	"unsafe"
 
 	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
-// nvmlInitErr records why NVML could not be loaded. It is reported by Nvidia.Init
-// rather than at package initialization time, where it cannot be returned.
-var nvmlInitErr error
+// nvmlLibs lists the library names tried in order when loading NVML.
+var nvmlLibs = []string{"libnvidia-ml.so.1", "libnvidia-ml.so"}
 
-func init() {
-	if cerr := C.nvml_open(); cerr != nil {
-		nvmlInitErr = fmt.Errorf("dlopen libnvidia-ml: %s", C.GoString(cerr))
-		return
-	}
+var (
+	nvmlOnce sync.Once
+	nvmlErr  error
+)
 
-	if err := nvmlCheck(C.wrap_Init()); err != nil {
-		nvmlInitErr = fmt.Errorf("nvmlInit: %w", err)
-	}
+// nvmlLoad opens the NVML library and initializes it once.
+func nvmlLoad() error {
+	nvmlOnce.Do(func() {
+		var errs []string
+		for _, lib := range nvmlLibs {
+			clib := C.CString(lib)
+			cerr := C.nvml_open(clib)
+			C.free(unsafe.Pointer(clib))
+			if cerr == nil {
+				if err := nvmlCheck(C.wrap_Init()); err != nil {
+					nvmlErr = fmt.Errorf("nvmlInit: %w", err)
+				}
+				return
+			}
+			errs = append(errs, C.GoString(cerr))
+		}
+		nvmlErr = fmt.Errorf("dlopen libnvidia-ml: %s", strings.Join(errs, ", "))
+	})
+	return nvmlErr
 }
 
 type DeviceHandle struct {
@@ -159,6 +175,24 @@ func nvmlCheck(ret C.nvmlReturn_t) error {
 		return nil
 	}
 	return errors.New(C.GoString(C.wrap_ErrStr(ret)))
+}
+
+// queryString passes a zeroed C buffer of the given size to an NVML string getter and
+// returns its content up to the first NUL byte or the end of the buffer.
+func queryString(size C.uint, query func(buf *C.char) C.nvmlReturn_t) (string, error) {
+	buf := (*C.char)(C.calloc(C.size_t(size), 1))
+	if buf == nil {
+		return "", errors.New("failed to allocate buffer")
+	}
+	defer C.free(unsafe.Pointer(buf))
+	if err := nvmlCheck(query(buf)); err != nil {
+		return "", err
+	}
+	str := C.GoStringN(buf, C.int(size))
+	if n := strings.IndexByte(str, 0); n >= 0 {
+		str = str[:n]
+	}
+	return str, nil
 }
 
 func QueryGPUAttestationReport(device *DeviceHandle, nonce []byte) ([]byte, error) {
@@ -195,12 +229,13 @@ func QueryGPUAttestationReport(device *DeviceHandle, nonce []byte) ([]byte, erro
 }
 
 func QueryUUID(device C.nvmlDevice_t) (string, error) {
-	uuidb := (*C.char)(C.malloc(C.NVML_DEVICE_UUID_V2_BUFFER_SIZE))
-	defer C.free(unsafe.Pointer(uuidb))
-	if err := nvmlCheck(C.wrap_DeviceGetUUID(device, uuidb)); err != nil {
+	uuid, err := queryString(C.NVML_DEVICE_UUID_V2_BUFFER_SIZE, func(buf *C.char) C.nvmlReturn_t {
+		return C.wrap_DeviceGetUUID(device, buf, C.NVML_DEVICE_UUID_V2_BUFFER_SIZE)
+	})
+	if err != nil {
 		return "", fmt.Errorf("nvmlDeviceGetUUID: %w", err)
 	}
-	return C.GoString(uuidb), nil
+	return uuid, nil
 }
 
 func QueryNonAttestationReportMeasurements(dev *DeviceHandle) (internal.NvidiaDeviceUnsignedEvidence, error) {
@@ -245,42 +280,33 @@ func QueryNonAttestationReportMeasurements(dev *DeviceHandle) (internal.NvidiaDe
 }
 
 func QueryInfoROMVersion(device C.nvmlDevice_t, obj internal.InforomObject) (string, error) {
-	var buf [C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE]byte
-	ret := C.wrap_DeviceGetInforomVersion(device, C.nvmlInforomObject_t(obj), (*C.char)(unsafe.Pointer(&buf[0])), C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE)
-	if ret != C.NVML_SUCCESS {
-		return "", fmt.Errorf("nvmlDeviceGetInforomVersion: %w", nvmlCheck(ret))
+	version, err := queryString(C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE, func(buf *C.char) C.nvmlReturn_t {
+		return C.wrap_DeviceGetInforomVersion(device, C.nvmlInforomObject_t(obj), buf, C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE)
+	})
+	if err != nil {
+		return "", fmt.Errorf("nvmlDeviceGetInforomVersion: %w", err)
 	}
-	n := bytes.IndexByte(buf[:], 0)
-	if n == -1 {
-		return string(buf[:]), nil
-	}
-	return string(buf[:n]), nil
+	return version, nil
 }
 
 func QueryInfoROMImageVersion(device C.nvmlDevice_t) (string, error) {
-	var buf [C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE]byte
-	ret := C.wrap_DeviceGetInforomImageVersion(device, (*C.char)(unsafe.Pointer(&buf[0])), C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE)
-	if ret != C.NVML_SUCCESS {
-		return "", fmt.Errorf("nvmlDeviceGetInforomImageVersion: %w", nvmlCheck(ret))
+	version, err := queryString(C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE, func(buf *C.char) C.nvmlReturn_t {
+		return C.wrap_DeviceGetInforomImageVersion(device, buf, C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE)
+	})
+	if err != nil {
+		return "", fmt.Errorf("nvmlDeviceGetInforomImageVersion: %w", err)
 	}
-	n := bytes.IndexByte(buf[:], 0)
-	if n == -1 {
-		return string(buf[:]), nil
-	}
-	return string(buf[:n]), nil
+	return version, nil
 }
 
+// QueryInfoROMConfigChecksum returns the 32-bit inforom configuration checksum formatted as
+// lowercase hex with 0x prefix and eight digits
 func QueryInfoROMConfigChecksum(device C.nvmlDevice_t) (string, error) {
-	var buf [C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE]byte
-	ret := C.wrap_DeviceGetInforomConfigurationChecksum(device, (*C.char)(unsafe.Pointer(&buf[0])))
-	if ret != C.NVML_SUCCESS {
-		return "", fmt.Errorf("nvmlDeviceGetInforomConfigurationChecksum: %w", nvmlCheck(ret))
+	var checksum C.uint
+	if err := nvmlCheck(C.wrap_DeviceGetInforomConfigurationChecksum(device, &checksum)); err != nil {
+		return "", fmt.Errorf("nvmlDeviceGetInforomConfigurationChecksum: %w", err)
 	}
-	n := bytes.IndexByte(buf[:], 0)
-	if n == -1 {
-		return string(buf[:]), nil
-	}
-	return string(buf[:n]), nil
+	return fmt.Sprintf("0x%08x", uint32(checksum)), nil
 }
 
 // ===========================================================================
@@ -289,16 +315,13 @@ func QueryInfoROMConfigChecksum(device C.nvmlDevice_t) (string, error) {
 
 // QueryGspFirmwareVersion fetches the GSP firmware version string
 func QueryGspFirmwareVersion(device C.nvmlDevice_t) (string, error) {
-	var buf [C.NVML_DEVICE_INFOROM_VERSION_BUFFER_SIZE]byte // Reusing 16-byte buffer size typically standard for versions
-	ret := C.wrap_DeviceGetGspFirmwareVersion(device, (*C.char)(unsafe.Pointer(&buf[0])))
-	if ret != C.NVML_SUCCESS {
-		return "", fmt.Errorf("nvmlDeviceGetGspFirmwareVersion: %w", nvmlCheck(ret))
+	version, err := queryString(C.NVML_GSP_FIRMWARE_VERSION_BUF_SIZE, func(buf *C.char) C.nvmlReturn_t {
+		return C.wrap_DeviceGetGspFirmwareVersion(device, buf)
+	})
+	if err != nil {
+		return "", fmt.Errorf("nvmlDeviceGetGspFirmwareVersion: %w", err)
 	}
-	n := bytes.IndexByte(buf[:], 0)
-	if n == -1 {
-		return string(buf[:]), nil
-	}
-	return string(buf[:n]), nil
+	return version, nil
 }
 
 // QueryGspFirmwareMode queries whether GSP mode is active and if it's default
@@ -342,7 +365,12 @@ func QueryGPUCertificate(device *DeviceHandle) (string, error) {
 	if err := nvmlCheck(C.wrap_DeviceGetConfComputeGpuCertificate(device.handle, &certStruct)); err != nil {
 		return "", fmt.Errorf("nvmlDeviceGetConfComputeGpuCertificate: %w", err)
 	}
-	cBuf := unsafe.Slice((*byte)(unsafe.Pointer(&certStruct.attestationCertChain[0])), len(certStruct.attestationCertChain))
+
+	size := int(certStruct.attestationCertChainSize)
+	if size <= 0 || size > len(certStruct.attestationCertChain) {
+		return "", fmt.Errorf("invalid attestation certificate chain size %d", size)
+	}
+	cBuf := unsafe.Slice((*byte)(unsafe.Pointer(&certStruct.attestationCertChain[0])), size)
 
 	n := bytes.IndexByte(cBuf, 0)
 	if n == -1 {
@@ -368,12 +396,12 @@ func GetHandle(i int) (*DeviceHandle, error) {
 func QueryGPUs() ([]GPUInfo, error) {
 
 	// Driver version is system-wide.
-	driverBuf := (*C.char)(C.malloc(C.NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE))
-	defer C.free(unsafe.Pointer(driverBuf))
-	if err := nvmlCheck(C.wrap_GetDriver(driverBuf, C.NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE)); err != nil {
+	driver, err := queryString(C.NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE, func(buf *C.char) C.nvmlReturn_t {
+		return C.wrap_GetDriver(buf, C.NVML_SYSTEM_DRIVER_VERSION_BUFFER_SIZE)
+	})
+	if err != nil {
 		return nil, fmt.Errorf("nvmlSystemGetDriverVersion: %w", err)
 	}
-	driver := C.GoString(driverBuf)
 
 	var count C.uint
 	if err := nvmlCheck(C.wrap_GetCount(&count)); err != nil {
@@ -393,15 +421,17 @@ func QueryGPUs() ([]GPUInfo, error) {
 			return nil, fmt.Errorf("fetching gpu certs failed")
 		}
 
-		nameBuf := (*C.char)(C.malloc(C.NVML_DEVICE_NAME_BUFFER_SIZE))
-		defer C.free(unsafe.Pointer(nameBuf))
-		if err := nvmlCheck(C.wrap_GetName(handle, nameBuf, C.NVML_DEVICE_NAME_BUFFER_SIZE)); err != nil {
+		name, err := queryString(C.NVML_DEVICE_NAME_BUFFER_SIZE, func(buf *C.char) C.nvmlReturn_t {
+			return C.wrap_GetName(handle, buf, C.NVML_DEVICE_NAME_BUFFER_SIZE)
+		})
+		if err != nil {
 			return nil, fmt.Errorf("nvmlDeviceGetName(%d): %w", i, err)
 		}
 
-		vbiosBuf := (*C.char)(C.malloc(C.NVML_DEVICE_VBIOS_VERSION_BUFFER_SIZE))
-		defer C.free(unsafe.Pointer(vbiosBuf))
-		if err := nvmlCheck(C.wrap_GetVbios(handle, vbiosBuf, C.NVML_DEVICE_VBIOS_VERSION_BUFFER_SIZE)); err != nil {
+		vbios, err := queryString(C.NVML_DEVICE_VBIOS_VERSION_BUFFER_SIZE, func(buf *C.char) C.nvmlReturn_t {
+			return C.wrap_GetVbios(handle, buf, C.NVML_DEVICE_VBIOS_VERSION_BUFFER_SIZE)
+		})
+		if err != nil {
 			return nil, fmt.Errorf("nvmlDeviceGetVbiosVersion(%d): %w", i, err)
 		}
 
@@ -412,10 +442,10 @@ func QueryGPUs() ([]GPUInfo, error) {
 
 		gpus = append(gpus, GPUInfo{
 			Index:         i,
-			DeviceName:    C.GoString(nameBuf),
+			DeviceName:    name,
 			DeviceUUID:    uuid,
 			DriverVersion: driver,
-			VBIOSVersion:  C.GoString(vbiosBuf),
+			VBIOSVersion:  vbios,
 			certs:         cert,
 		})
 
