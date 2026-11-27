@@ -132,6 +132,16 @@ jobs:
         with:
           name: azuretool
           path: tools/azuretool/azuretool
+      - name: "Upload spire-agent-plugin-cmc"
+        uses: actions/upload-artifact@v7
+        with:
+          name: spire-agent-plugin-cmc
+          path: spire/spire-agent-plugin-cmc/spire-agent-plugin-cmc
+      - name: "Upload spire-server-plugin-cmc"
+        uses: actions/upload-artifact@v7
+        with:
+          name: spire-server-plugin-cmc
+          path: spire/spire-server-plugin-cmc/spire-server-plugin-cmc
 
   build-caddy:
     runs-on: ubuntu-latest
@@ -177,4 +187,6 @@ jobs:
             artifacts/tdxtool/tdxtool
             artifacts/snptool/snptool
             artifacts/azuretool/azuretool
+            artifacts/spire-agent-plugin-cmc/spire-agent-plugin-cmc
+            artifacts/spire-server-plugin-cmc/spire-server-plugin-cmc
             artifacts/caddy-atls/caddy
