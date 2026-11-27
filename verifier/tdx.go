@@ -393,8 +393,10 @@ func parseECDSAQuoteSignatureDataStructV4(buf *bytes.Buffer, quoteSigStruct *ECD
 	return nil
 }
 
-// verifyTdxMrs recalculates the TDX measurement registers based on the reference values
-// and compares them with the measurements. For the MR index, the function uses the mapping
+// verifyTdxMrs calculates the TDX measurement registers and compares them with the measurements.
+// If the CC eventlog is present, the RTMRs are replayed from the eventlog and every event must
+// match a reference value of the same index. Otherwise, the RTMRs are recalculated from the
+// reference values in manifest order. For the MR index, the function uses the mapping
 // according to UEFI Spec 2.10 Section 38.4.1:
 // CC MR Index | TDX register
 // 0           | MRTD
@@ -436,17 +438,34 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 		refsPerMr[idx] = append(refsPerMr[idx], refval)
 	}
 
-	// Recalculate the expected MR values based on the reference values. MRTD and MRSEAM directly
-	// hold a digest and therefore support alternative reference values, the RTMRs are recalculated
-	// by extending the individual measurements
+	// The CC eventlog only contains RTMR events
+	for _, artifact := range artifacts {
+		if artifact.Type == ar.TYPE_CC_EVENTLOG && (artifact.Index < 1 || artifact.Index > 4) {
+			log.Warnf("Illegal CC eventlog MR index %v", artifact.Index)
+			return nil, nil, ar.IllegalTdxMrIndex, false
+		}
+	}
+
+	// Calculate the expected MR values. MRTD and MRSEAM directly hold a digest and therefore
+	// support alternative reference values. If the CC eventlog is present, the RTMRs are
+	// calculated by replaying the eventlog and every event must match a reference value.
+	// Otherwise, the RTMRs are recalculated by extending the reference values in manifest order
 	calculatedMrs := make([][]byte, NUM_TDX_MRS)
+	eventsMatched := make([]bool, NUM_TDX_MRS)
 	for idx, refs := range refsPerMr {
 		calculatedMrs[idx] = make([]byte, 48)
+		eventsMatched[idx] = true
 
 		if !directTdxMr(idx) {
 			if err := checkNoAlternatives(refs); err != nil {
 				log.Warnf("Failed to verify %v: %v", internal.IndexToMr(idx), err)
 				return nil, nil, ar.RefValAltUnsupported, false
+			}
+			if elPresent {
+				var results []ar.DigestResult
+				calculatedMrs[idx], results, eventsMatched[idx] = replayCcel(idx, artifacts, refs)
+				detailedResults = append(detailedResults, results...)
+				continue
 			}
 			for _, refval := range refs {
 				calculatedMrs[idx] = internal.ExtendSha384(calculatedMrs[idx],
@@ -507,9 +526,13 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 	// Verify the calculated MR values against the quote body MR values
 	for i := 0; i < NUM_TDX_MRS; i++ {
 
-		successMrs[i] = bytes.Equal(calculatedMrs[i], measuredMrs[i])
+		mrMatch := bytes.Equal(calculatedMrs[i], measuredMrs[i])
+		successMrs[i] = mrMatch && eventsMatched[i]
 		if !successMrs[i] {
 			success = false
+		}
+		replayed := elPresent && !directTdxMr(i)
+		if !mrMatch {
 			if !elPresent {
 				detailedResults = append(detailedResults,
 					ar.DigestResult{
@@ -522,9 +545,18 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 						HashAlg:  crypto.SHA384.String(),
 					})
 			}
-			log.Warnf("%v: Measurement %q does not match recalculation %q",
-				internal.IndexToMr(i),
-				hex.EncodeToString(measuredMrs[i]), hex.EncodeToString(calculatedMrs[i]))
+			if replayed {
+				log.Warnf("%v: Event log replay %q does not match quoted RTMR %q",
+					internal.IndexToMr(i),
+					hex.EncodeToString(calculatedMrs[i]), hex.EncodeToString(measuredMrs[i]))
+			} else {
+				log.Warnf("%v: Measurement %q does not match recalculation %q",
+					internal.IndexToMr(i),
+					hex.EncodeToString(measuredMrs[i]), hex.EncodeToString(calculatedMrs[i]))
+			}
+		} else if replayed {
+			log.Tracef("%v: Event log replay does match quoted RTMR %q", internal.IndexToMr(i),
+				hex.EncodeToString(measuredMrs[i]))
 		} else {
 			log.Tracef("%v: Measurement %q does match recalculation", internal.IndexToMr(i),
 				hex.EncodeToString(measuredMrs[i]))
@@ -567,57 +599,7 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 			}
 		}
 	} else {
-		// If the CC eventlog is present, we can display the individual measurements
-		log.Debug("Verifying eventlog against reference values")
-		for _, artifact := range artifacts {
-			if artifact.Type == ar.TYPE_CC_EVENTLOG {
-				log.Debugf("Verifying %v %v eventlog events", len(artifact.Events), internal.IndexToMr(artifact.Index))
-				for _, event := range artifact.Events {
-					found := false
-					var refval ar.Component
-					for _, ref := range refvals {
-						if bytes.Equal(ref.GetHash(crypto.SHA384), event.GetHash(crypto.SHA384)) {
-							found = true
-							refval = ref
-							break
-						}
-					}
-					r := ar.DigestResult{
-						Type:        ar.DigestTypeFromBool(found, ar.TYPE_DIGEST_MEASUREMENT),
-						Name:        event.Name,
-						Launched:    true,
-						Success:     found,
-						Index:       artifact.Index,
-						Digest:      event.GetHash(crypto.SHA384),
-						Description: event.Description,
-						HashAlg:     crypto.SHA384.String(),
-					}
-					if r.Success {
-						// Always use the refvals description if present, as it is more verbose
-						nameInfo := refval.Name
-						if event.Name != "" && !strings.EqualFold(refval.Name, event.Name) {
-							nameInfo += ": " + event.Name
-						}
-						r.Name = nameInfo
-						r.Description = refval.Description
-						r.PackageUrl = refval.PackageUrl
-					}
-					detailedResults = append(detailedResults, r)
-
-					if r.Success {
-						log.Tracef("Successfully verified measurement %v: %v = %v",
-							internal.IndexToMr(artifact.Index), event.Name,
-							hex.EncodeToString(event.GetHash(crypto.SHA384)))
-					} else {
-						success = false
-						log.Warnf("Failed to verify measurement %v: %v = %v",
-							internal.IndexToMr(artifact.Index), event.Name,
-							hex.EncodeToString(event.GetHash(crypto.SHA384)))
-					}
-
-				}
-			}
-		}
+		// Every RTMR reference value must be present in the eventlog of its index
 		log.Debugf("Verifying reference values against eventlog measurements")
 		for _, refval := range refvals {
 			idx, err := refval.GetIndex()
@@ -667,6 +649,73 @@ func verifyTdxMrs(body *TdxReportBody, artifacts []ar.Artifact, refvals []ar.Com
 	}
 
 	return mrResults, detailedResults, ar.NotSpecified, success
+}
+
+// replayCcel replays the CC eventlog events of the specified RTMR index in eventlog order and
+// looks up a reference value of the same index for each event. It returns the replayed RTMR,
+// the detailed results and whether every event matched a reference value
+func replayCcel(idx int, artifacts []ar.Artifact, refs []ar.Component,
+) ([]byte, []ar.DigestResult, bool) {
+
+	replayed := make([]byte, 48)
+	results := make([]ar.DigestResult, 0)
+	allMatched := true
+
+	for _, artifact := range artifacts {
+		if artifact.Type != ar.TYPE_CC_EVENTLOG || artifact.Index != idx {
+			continue
+		}
+		log.Debugf("Verifying %v %v eventlog events", len(artifact.Events),
+			internal.IndexToMr(idx))
+		for _, event := range artifact.Events {
+			eventHash := event.GetHash(crypto.SHA384)
+			r := ar.DigestResult{
+				Type:        ar.TYPE_DIGEST_MEASUREMENT,
+				Name:        event.Name,
+				Launched:    true,
+				Success:     false,
+				Index:       idx,
+				Digest:      eventHash,
+				Description: event.Description,
+				HashAlg:     crypto.SHA384.String(),
+			}
+
+			if len(eventHash) == 0 {
+				log.Warnf("%v measurement %v does not contain a SHA-384 digest",
+					internal.IndexToMr(idx), event.Name)
+				results = append(results, r)
+				allMatched = false
+				continue
+			}
+
+			replayed = internal.ExtendSha384(replayed, eventHash)
+
+			ref := getReferenceValue(crypto.SHA384, eventHash, idx, refs)
+			if ref == nil {
+				log.Warnf("Failed to verify measurement %v: %v = %v",
+					internal.IndexToMr(idx), event.Name, hex.EncodeToString(eventHash))
+				results = append(results, r)
+				allMatched = false
+				continue
+			}
+
+			// Always use the refvals description if present, as it is more verbose
+			nameInfo := ref.Name
+			if event.Name != "" && !strings.EqualFold(ref.Name, event.Name) {
+				nameInfo += ": " + event.Name
+			}
+			r.Type = ar.TYPE_DIGEST_VERIFIED
+			r.Success = true
+			r.Name = nameInfo
+			r.Description = ref.Description
+			r.PackageUrl = ref.PackageUrl
+			results = append(results, r)
+			log.Tracef("Successfully verified measurement %v: %v = %v",
+				internal.IndexToMr(idx), event.Name, hex.EncodeToString(eventHash))
+		}
+	}
+
+	return replayed, results, allMatched
 }
 
 func verifyTdxTdId(report *TdxReportBody, refTdId *ar.TDId, tcbInfo *pcs.TdxTcbInfo) ([]ar.DigestResult, bool) {

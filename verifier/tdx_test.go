@@ -16,7 +16,9 @@
 package verifier
 
 import (
+	"crypto/sha512"
 	"encoding/base64"
+	"strconv"
 	"testing"
 	"time"
 
@@ -24,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
+	"github.com/Fraunhofer-AISEC/cmc/internal"
 )
 
 func TestVerifyTdx(t *testing.T) {
@@ -527,6 +530,57 @@ func TestVerifyTdx(t *testing.T) {
 			},
 			want: ar.StatusFail,
 		},
+		{
+			name: "Reference Values In Different Order",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(tdxCcEventlog, collateralArtifact),
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy:         tdxTestPolicy,
+				refvals:        refvalsRtmr0Swapped,
+				nonce:          validTDXNonce,
+			},
+			want: ar.StatusSuccess,
+		},
+		{
+			name: "Eventlog Reordered",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(eventlogRtmr0Swapped, collateralArtifact),
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy:         tdxTestPolicy,
+				refvals:        validTdxRefvals,
+				nonce:          validTDXNonce,
+			},
+			want: ar.StatusFail,
+		},
+		{
+			name: "Eventlog Digest Approved Only For Other Index",
+			args: args{
+				evidence: ar.Evidence{
+					Type: ar.TYPE_EVIDENCE_TDX,
+					Data: tdxQuote,
+				},
+				collateral: ar.Collateral{
+					Artifacts: append(tdxCcEventlog, collateralArtifact),
+				},
+				caFingerprints: tdxRootCAFingerprints,
+				policy:         tdxTestPolicy,
+				refvals:        refvalsNoRtmr0Separator,
+				nonce:          validTDXNonce,
+			},
+			want: ar.StatusFail,
+		},
 	}
 
 	logrus.SetLevel(logrus.TraceLevel)
@@ -544,6 +598,7 @@ func TestVerifyTdx(t *testing.T) {
 			// Some tests require the current time
 			if tt.args.useCurrentTime {
 				now = oldNow
+				defer func() { now = func() time.Time { return fixed } }()
 			}
 
 			log.Infof("Running Unit Test %q", tt.name)
@@ -2027,6 +2082,15 @@ var (
 
 	// An alternative group on RTMR0, which is recalculated by extending the measurements
 	altGroupOnRtmr = tdxRefvalsWithGroupOnRtmr0("ramsize")
+
+	// RTMR0 reference values TD Hob and Configuration FV swapped
+	refvalsRtmr0Swapped = swapTdxRefvals(validTdxRefvals, 1, 2)
+
+	// RTMR0 events TD Hob and Configuration FV swapped
+	eventlogRtmr0Swapped = swapTdxEvents(tdxCcEventlog, 1, 0, 1)
+
+	// The RTMR0 EV_SEPARATOR is only approved by the RTMR1 reference value with the same digest
+	refvalsNoRtmr0Separator = dropTdxRefval(validTdxRefvals, 1, "EV_SEPARATOR")
 )
 
 // tdxRefvalsWithMrSeam returns the valid TDX reference values with the MRSEAM reference value
@@ -2072,6 +2136,40 @@ func tdxRefvalsWithGroupOnRtmr0(group string) []ar.Component {
 	}
 
 	return refvals
+}
+
+// swapTdxRefvals returns a copy of the reference values with the entries i and j swapped
+func swapTdxRefvals(refvals []ar.Component, i, j int) []ar.Component {
+	ret := append([]ar.Component(nil), refvals...)
+	ret[i], ret[j] = ret[j], ret[i]
+	return ret
+}
+
+// swapTdxEvents returns a copy of the CC eventlog with the events i and j of the given index
+// swapped
+func swapTdxEvents(artifacts []ar.Artifact, index, i, j int) []ar.Artifact {
+	ret := make([]ar.Artifact, 0, len(artifacts))
+	for _, a := range artifacts {
+		a.Events = append([]ar.Component(nil), a.Events...)
+		if a.Index == index {
+			a.Events[i], a.Events[j] = a.Events[j], a.Events[i]
+		}
+		ret = append(ret, a)
+	}
+	return ret
+}
+
+// dropTdxRefval returns a copy of the reference values without the reference values with the
+// given index and name
+func dropTdxRefval(refvals []ar.Component, index int, name string) []ar.Component {
+	ret := make([]ar.Component, 0, len(refvals))
+	for _, rv := range refvals {
+		if idx, err := rv.GetIndex(); err == nil && idx == index && rv.Name == name {
+			continue
+		}
+		ret = append(ret, rv)
+	}
+	return ret
 }
 
 // Run: fetch-test-collateral tdx <quote>
@@ -2239,6 +2337,184 @@ func TestVerifyTdxXfam(t *testing.T) {
 			got := verifyTdxXfam(measured, tt.references, tt.ignoreMask)
 			if got.Status != tt.want {
 				t.Errorf("verifyTdxXfam() = %v, want %v (%v)", got.Status, tt.want, got.Details)
+			}
+		})
+	}
+}
+
+func TestVerifyTdxMrs(t *testing.T) {
+
+	digest := func(name string) []byte {
+		h := sha512.Sum384([]byte(name))
+		return h[:]
+	}
+	refval := func(name string, index int) ar.Component {
+		return ar.Component{
+			Type:   ar.TYPE_FIRMWARE,
+			Name:   name,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-384", Content: digest(name)}},
+			Properties: []ar.Property{
+				{Name: ar.PROPERTY_TRUST_ANCHOR, Value: ar.TRUST_ANCHOR_TDX},
+				{Name: ar.PROPERTY_INDEX, Value: strconv.Itoa(index)},
+			},
+		}
+	}
+	event := func(name string) ar.Component {
+		return ar.Component{
+			Name:   name,
+			Hashes: []ar.ReferenceHash{{Alg: "SHA-384", Content: digest(name)}},
+		}
+	}
+	eventlog := func(index int, names ...string) ar.Artifact {
+		a := ar.Artifact{Type: ar.TYPE_CC_EVENTLOG, Index: index}
+		for _, n := range names {
+			a.Events = append(a.Events, event(n))
+		}
+		return a
+	}
+	extend := func(names ...string) [48]byte {
+		mr := make([]byte, 48)
+		for _, n := range names {
+			mr = internal.ExtendSha384(mr, digest(n))
+		}
+		return [48]byte(mr)
+	}
+
+	// The separator is measured into RTMR0 and RTMR1
+	body := &TdxReportBody{
+		MrTd:   [48]byte(digest("mrtd")),
+		MrSeam: [48]byte(digest("mrseam")),
+		RtMr0:  extend("hob", "cfv", "separator"),
+		RtMr1:  extend("kernel", "separator"),
+	}
+
+	validEventlog := []ar.Artifact{
+		eventlog(1, "hob", "cfv", "separator"),
+		eventlog(2, "kernel", "separator"),
+	}
+
+	validRefvals := []ar.Component{
+		refval("mrtd", 0),
+		refval("hob", 1),
+		refval("cfv", 1),
+		refval("separator", 1),
+		refval("kernel", 2),
+		refval("separator", 2),
+		refval("mrseam", 5),
+	}
+
+	eventNoDigest := eventlog(1, "hob", "cfv", "separator")
+	eventNoDigest.Events[1].Hashes = nil
+
+	tests := []struct {
+		name      string
+		artifacts []ar.Artifact
+		refvals   []ar.Component
+		wantCode  ar.ErrorCode
+		want      bool
+	}{
+		{
+			name:      "Valid Eventlog",
+			artifacts: validEventlog,
+			refvals:   validRefvals,
+			wantCode:  ar.NotSpecified,
+			want:      true,
+		},
+		{
+			name:      "Reference Values In Different Order",
+			artifacts: validEventlog,
+			refvals:   swapTdxRefvals(validRefvals, 1, 3),
+			wantCode:  ar.NotSpecified,
+			want:      true,
+		},
+		{
+			name: "Eventlog Reordered",
+			artifacts: []ar.Artifact{
+				eventlog(1, "cfv", "hob", "separator"),
+				eventlog(2, "kernel", "separator"),
+			},
+			refvals:  validRefvals,
+			wantCode: ar.NotSpecified,
+			want:     false,
+		},
+		{
+			name:      "Eventlog Truncated",
+			artifacts: []ar.Artifact{eventlog(1, "hob", "cfv")},
+			refvals:   validRefvals,
+			wantCode:  ar.NotSpecified,
+			want:      false,
+		},
+		{
+			name:      "Digest Approved Only For Other Index",
+			artifacts: validEventlog,
+			refvals:   dropTdxRefval(validRefvals, 1, "separator"),
+			wantCode:  ar.NotSpecified,
+			want:      false,
+		},
+		{
+			name:      "Event Without Reference Value",
+			artifacts: validEventlog,
+			refvals:   dropTdxRefval(validRefvals, 1, "cfv"),
+			wantCode:  ar.NotSpecified,
+			want:      false,
+		},
+		{
+			name:      "Reference Value Not In Eventlog",
+			artifacts: validEventlog,
+			refvals:   append(append([]ar.Component(nil), validRefvals...), refval("initrd", 2)),
+			wantCode:  ar.NotSpecified,
+			want:      false,
+		},
+		{
+			name: "Event Without SHA-384 Digest",
+			artifacts: []ar.Artifact{
+				eventNoDigest,
+				eventlog(2, "kernel", "separator"),
+			},
+			refvals:  validRefvals,
+			wantCode: ar.NotSpecified,
+			want:     false,
+		},
+		{
+			name: "Illegal Eventlog Index",
+			artifacts: []ar.Artifact{
+				eventlog(1, "hob", "cfv", "separator"),
+				eventlog(2, "kernel", "separator"),
+				eventlog(5, "mrseam"),
+			},
+			refvals:  validRefvals,
+			wantCode: ar.IllegalTdxMrIndex,
+			want:     false,
+		},
+		{
+			name:      "No Eventlog",
+			artifacts: nil,
+			refvals:   validRefvals,
+			wantCode:  ar.NotSpecified,
+			want:      true,
+		},
+		{
+			name:      "No Eventlog Reference Values In Different Order",
+			artifacts: nil,
+			refvals:   swapTdxRefvals(validRefvals, 1, 3),
+			wantCode:  ar.NotSpecified,
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mrResults, _, code, got := verifyTdxMrs(body, tt.artifacts, tt.refvals)
+			if code != tt.wantCode {
+				t.Errorf("verifyTdxMrs() code = %v, want %v", code, tt.wantCode)
+			}
+			if got != tt.want {
+				t.Errorf("verifyTdxMrs() success = %v, want %v", got, tt.want)
+			}
+			for _, r := range mrResults {
+				if !r.Success && tt.want {
+					t.Errorf("verifyTdxMrs() %v failed", r.Name)
+				}
 			}
 		})
 	}
