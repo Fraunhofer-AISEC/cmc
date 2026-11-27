@@ -69,6 +69,20 @@ NodeAttestor "cmc" {
 }
 ```
 
+The server plugin can publish attestation results asynchronously:
+
+```conf
+    plugin_data {
+        ...
+        publish_results = "https://backend:8080/results"     # attestation results
+        publish_ocsf    = "https://backend:8080/ocsf"        # OCSF detection findings
+        publish_network = "https://backend:8080/network"     # network events
+        publish_token   = "/etc/spire/cmc/publish-token"     # optional, backend authorization token
+        publish_cert    = "/etc/spire/cmc/publish-cert.pem"  # optional, mTLS client certificate
+        publish_key     = "/etc/spire/cmc/publish-key.pem"   # optional, mTLS client key
+    }
+```
+
 ## Test
 
 Run the cmcd:
