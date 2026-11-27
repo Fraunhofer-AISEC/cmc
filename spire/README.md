@@ -80,6 +80,7 @@ The server plugin can publish attestation results asynchronously:
         publish_token   = "/etc/spire/cmc/publish-token"     # optional, backend authorization token
         publish_cert    = "/etc/spire/cmc/publish-cert.pem"  # optional, mTLS client certificate
         publish_key     = "/etc/spire/cmc/publish-key.pem"   # optional, mTLS client key
+        publish_allow_system_certs = true                    # optional, trust public CAs for the backend
     }
 ```
 

@@ -70,6 +70,8 @@ type Config struct {
 	PublishCert string `hcl:"publish_cert"`
 	// PublishKey is the optional client key for mTLS authentication when publishing
 	PublishKey string `hcl:"publish_key"`
+	// PublishAllowSystemCerts additionally trusts the system cert pool for the publish backends
+	PublishAllowSystemCerts bool `hcl:"publish_allow_system_certs"`
 }
 
 type config struct {
@@ -81,11 +83,12 @@ type config struct {
 }
 
 type publishConfig struct {
-	results    string
-	ocsf       string
-	network    string
-	token      []byte
-	clientCert *tls.Certificate
+	results          string
+	ocsf             string
+	network          string
+	token            []byte
+	clientCert       *tls.Certificate
+	allowSystemCerts bool
 }
 
 type Plugin struct {
@@ -175,9 +178,10 @@ func buildConfig(req *configv1.ConfigureRequest) (*config, error) {
 
 func buildPublishConfig(hclConf *Config) (publishConfig, error) {
 	c := publishConfig{
-		results: hclConf.PublishResults,
-		ocsf:    hclConf.PublishOcsf,
-		network: hclConf.PublishNetwork,
+		results:          hclConf.PublishResults,
+		ocsf:             hclConf.PublishOcsf,
+		network:          hclConf.PublishNetwork,
+		allowSystemCerts: hclConf.PublishAllowSystemCerts,
 	}
 	if hclConf.PublishToken != "" {
 		token, err := os.ReadFile(hclConf.PublishToken)
@@ -266,7 +270,7 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 // do not affect the attestation
 func (p *Plugin) publish(c *config, result *ar.AttestationResult) {
 	if err := pub.Publish(c.publish.results, c.publish.ocsf, c.publish.network, c.publish.token, "",
-		result, c.rootCas, false, c.publish.clientCert); err != nil {
+		result, c.rootCas, c.publish.allowSystemCerts, c.publish.clientCert); err != nil {
 		p.logger.Warn("Failed to publish attestation result", "error", err)
 	}
 }
