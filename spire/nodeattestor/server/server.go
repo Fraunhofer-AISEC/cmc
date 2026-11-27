@@ -19,8 +19,10 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
@@ -40,6 +42,7 @@ import (
 
 	ar "github.com/Fraunhofer-AISEC/cmc/attestationreport"
 	"github.com/Fraunhofer-AISEC/cmc/internal"
+	pub "github.com/Fraunhofer-AISEC/cmc/publish"
 	"github.com/Fraunhofer-AISEC/cmc/spire/logging"
 	na "github.com/Fraunhofer-AISEC/cmc/spire/nodeattestor"
 	"github.com/Fraunhofer-AISEC/cmc/verifier"
@@ -55,6 +58,18 @@ type Config struct {
 	Policies string `hcl:"policies"`
 	// PolicyEngine is the engine evaluating Policies
 	PolicyEngine string `hcl:"policy_engine"`
+	// PublishResults is the optional HTTP address to publish attestation results to
+	PublishResults string `hcl:"publish_results"`
+	// PublishOcsf is the optional HTTP address to publish OCSF detection findings to
+	PublishOcsf string `hcl:"publish_ocsf"`
+	// PublishNetwork is the optional HTTP address to publish lightweight network events to
+	PublishNetwork string `hcl:"publish_network"`
+	// PublishToken is the optional path to the token for backend authorization
+	PublishToken string `hcl:"publish_token"`
+	// PublishCert is the optional client certificate for mTLS authentication when publishing
+	PublishCert string `hcl:"publish_cert"`
+	// PublishKey is the optional client key for mTLS authentication when publishing
+	PublishKey string `hcl:"publish_key"`
 }
 
 type config struct {
@@ -62,6 +77,15 @@ type config struct {
 	rootCas      []*x509.Certificate
 	policies     []byte
 	policyEngine verifier.PolicyEngineSelect
+	publish      publishConfig
+}
+
+type publishConfig struct {
+	results    string
+	ocsf       string
+	network    string
+	token      []byte
+	clientCert *tls.Certificate
 }
 
 type Plugin struct {
@@ -122,6 +146,11 @@ func buildConfig(req *configv1.ConfigureRequest) (*config, error) {
 		rootCas:     cas,
 	}
 
+	c.publish, err = buildPublishConfig(hclConf)
+	if err != nil {
+		return nil, err
+	}
+
 	if hclConf.Policies == "" {
 		if hclConf.PolicyEngine != "" {
 			return nil, errors.New("policy_engine requires policies")
@@ -141,6 +170,32 @@ func buildConfig(req *configv1.ConfigureRequest) (*config, error) {
 		return nil, fmt.Errorf("invalid policy_engine: %w", err)
 	}
 
+	return c, nil
+}
+
+func buildPublishConfig(hclConf *Config) (publishConfig, error) {
+	c := publishConfig{
+		results: hclConf.PublishResults,
+		ocsf:    hclConf.PublishOcsf,
+		network: hclConf.PublishNetwork,
+	}
+	if hclConf.PublishToken != "" {
+		token, err := os.ReadFile(hclConf.PublishToken)
+		if err != nil {
+			return c, fmt.Errorf("failed to read publish_token: %w", err)
+		}
+		c.token = bytes.TrimSpace(token)
+	}
+	if (hclConf.PublishCert == "") != (hclConf.PublishKey == "") {
+		return c, errors.New("publish_cert and publish_key must be set together")
+	}
+	if hclConf.PublishCert != "" {
+		cert, err := tls.LoadX509KeyPair(hclConf.PublishCert, hclConf.PublishKey)
+		if err != nil {
+			return c, fmt.Errorf("failed to load publish client certificate: %w", err)
+		}
+		c.clientCert = &cert
+	}
 	return c, nil
 }
 
@@ -189,6 +244,12 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 		SkipPeerAuth: true,
 	})
 
+	if c.publish.results != "" || c.publish.ocsf != "" || c.publish.network != "" {
+		hostname, _ := internal.Fqdn()
+		result.Verifier = ar.Endpoint{Hostname: hostname}
+		go p.publish(c, result)
+	}
+
 	attrs, err := agentAttributes(c.trustDomain, result)
 	if err != nil {
 		p.logger.Warn("Attestation failed", "error", err, "prover", result.Prover.Hostname)
@@ -199,6 +260,15 @@ func (p *Plugin) Attest(stream nodeattestorv1.NodeAttestor_AttestServer) error {
 	return stream.Send(&nodeattestorv1.AttestResponse{
 		Response: &nodeattestorv1.AttestResponse_AgentAttributes{AgentAttributes: attrs},
 	})
+}
+
+// publish sends the attestation result to the configured backends. Failures are only logged and
+// do not affect the attestation
+func (p *Plugin) publish(c *config, result *ar.AttestationResult) {
+	if err := pub.Publish(c.publish.results, c.publish.ocsf, c.publish.network, c.publish.token, "",
+		result, c.rootCas, false, c.publish.clientCert); err != nil {
+		p.logger.Warn("Failed to publish attestation result", "error", err)
+	}
 }
 
 func (p *Plugin) getConfig() (*config, error) {

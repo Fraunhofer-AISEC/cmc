@@ -145,6 +145,10 @@ func TestConfigure(t *testing.T) {
 	if err := os.WriteFile(policies, []byte("true"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	token := filepath.Join(dir, "token")
+	if err := os.WriteFile(token, []byte("secret\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	tests := []struct {
 		name    string
@@ -162,6 +166,13 @@ policy_engine = "js"`, td: "example.org", wantErr: true},
 		{name: "unknown engine", hcl: `root_cas = ["` + ca + `"]
 policies = "` + policies + `"
 policy_engine = "foo"`, td: "example.org", wantErr: true},
+		{name: "publish", hcl: `root_cas = ["` + ca + `"]
+publish_results = "https://localhost:8080/results"
+publish_token = "` + token + `"`, td: "example.org"},
+		{name: "unreadable publish token", hcl: `root_cas = ["` + ca + `"]
+publish_token = "` + dir + `/none"`, td: "example.org", wantErr: true},
+		{name: "publish cert without key", hcl: `root_cas = ["` + ca + `"]
+publish_cert = "` + ca + `"`, td: "example.org", wantErr: true},
 		{name: "invalid trust domain", hcl: `root_cas = ["` + ca + `"]`, td: "Invalid TD", wantErr: true},
 	}
 
